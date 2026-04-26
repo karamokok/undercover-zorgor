@@ -142,12 +142,23 @@
         
         #room-code-display { position: absolute; top: 1rem; right: 1.5rem; background: rgba(255,255,255,0.1); padding: 0.3rem 0.8rem; border-radius: 0.5rem; font-family: monospace; font-weight: bold; }
         .leave-btn {
-            position: absolute; top: 1rem; left: 1.5rem; background: transparent; border: none; font-size: 1.5rem; cursor: pointer; box-shadow: none; padding: 0; width: auto; color: var(--text-muted);
+            position: absolute; top: 1rem; left: 1rem;
+            background: rgba(239, 68, 68, 0.2); color: #ef4444;
+            border: 1px solid rgba(239, 68, 68, 0.3); padding: 0.4rem 0.8rem;
+            border-radius: 0.5rem; cursor: pointer;
         }
         .leave-btn:hover { background: transparent; color: var(--danger); transform: scale(1.1); }
     </style>
 </head>
 <body>
+    <audio id="bg-music" loop src="/static/music.mp3"></audio>
+    <button id="music-toggle" onclick="toggleMusic()" style="position:absolute; top:1rem; left:1rem; background:rgba(255,255,255,0.1); border:none; font-size:1.5rem; padding:0.5rem; border-radius:50%; width:45px; height:45px; z-index:1000; cursor:pointer; display:flex; align-items:center; justify-content:center;">🎵</button>
+
+    <div id="countdown-modal" class="hidden" style="position:fixed; top:0; left:0; width:100%; height:100dvh; z-index:9000; background:rgba(0,0,0,0.95); backdrop-filter:blur(10px); display:flex; flex-direction:column; align-items:center; justify-content:center;">
+        <h2 style="color:var(--primary); font-size:2.5rem; margin-bottom:2rem; text-align:center;">Le jeu commence dans...</h2>
+        <div id="countdown-number" style="font-size:8rem; font-weight:900; color:white; text-shadow:0 0 30px var(--primary);">5</div>
+    </div>
+
     <div id="room-code-display" class="hidden">Salle : <span id="display-code"></span></div>
     <div id="app">
         <!-- LOBBY JOIN -->
@@ -224,10 +235,14 @@
         <!-- PLAYING VIEW (Word & Action) -->
         <div id="playing-view" class="card hidden">
             <button class="leave-btn" onclick="leaveGame()" title="Quitter la salle">🚪</button>
-            <div class="text-center mb-3 mt-3">
-                <h3 class="text-muted">Ton mot secret</h3>
-                <div class="secret-word-display" id="my-secret-word"></div>
-                <p class="text-muted" id="my-role-desc"></p>
+            <div id="host-controls" class="hidden" style="position:absolute; top:1rem; right:1rem; z-index:100;">
+                <button class="btn-danger" style="padding:0.4rem 1rem; font-size:0.9rem;" onclick="if(confirm('Annuler la partie et retourner au salon ?')) socket.emit('back_to_lobby')">🛑 Arrêter</button>
+            </div>
+            
+            <div class="card" style="margin-bottom: 1rem; margin-top:3rem;">
+                <h2>Ton Rôle</h2>
+                <div id="my-role-desc" style="color: var(--text-muted); margin-bottom: 0.5rem;">Attente des rôles...</div>
+                <div class="secret-word-display" id="my-secret-word">?</div>
             </div>
             
             <div id="action-area" class="text-center p-3 mb-2" style="background:rgba(255,255,255,0.05); border-radius:1rem;">
@@ -277,13 +292,14 @@
 
         <!-- GAME OVER -->
         <div id="gameover-view" class="card hidden text-center">
-            <h1 class="mb-2" id="winner-text" style="font-size:2.5rem;"></h1>
-            <p class="mb-3 text-muted">La partie est terminée.</p>
-            <div id="gameover-roles" class="player-list mb-3"></div>
-            
-            <div id="host-gameover-controls" class="hidden">
-                <button class="btn-primary mb-2" onclick="socket.emit('play_again')">🔄 Nouvelle partie</button>
-                <button class="btn-danger" style="background:#475569" onclick="socket.emit('close_room')">🔒 Fermer la salle</button>
+            <h1 class="title-main">Partie Terminée</h1>
+            <div class="card" id="gameover-content">
+                <h2 id="winner-text" style="color:var(--primary); font-size:2rem; margin-bottom:1rem;"></h2>
+                <p>La partie est terminée. Le salon reste ouvert.</p>
+            </div>
+            <div id="host-gameover-controls" class="card hidden" style="margin-top:1rem;">
+                <button class="btn-primary w-full mb-2" onclick="socket.emit('back_to_lobby')">Retour au salon</button>
+                <button class="btn-danger w-full" style="background:#475569" onclick="socket.emit('close_room')">🔒 Fermer la salle</button>
             </div>
             <button class="btn-danger mt-2" style="background:transparent; border:1px solid rgba(255,255,255,0.2)" onclick="leaveGame()">🚪 Quitter</button>
         </div>
@@ -324,9 +340,23 @@
         let isHost = false;
         let mySid = null;
         let timerInterval = null;
+        let countdownInterval = null;
         
         let chatOpen = false;
         let unreadCount = 0;
+        let musicPlaying = false;
+        
+        function toggleMusic() {
+            const audio = document.getElementById('bg-music');
+            if (musicPlaying) {
+                audio.pause();
+                document.getElementById('music-toggle').textContent = '🔇';
+            } else {
+                audio.play().catch(e => console.log('Audio play failed', e));
+                document.getElementById('music-toggle').textContent = '🎵';
+            }
+            musicPlaying = !musicPlaying;
+        }
 
         function toggleChat() {
             chatOpen = !chatOpen;
@@ -432,6 +462,9 @@
             myRoom = data.room;
             sessionStorage.setItem('myRoom', data.room);
             
+            document.getElementById('countdown-modal').classList.add('hidden');
+            clearInterval(countdownInterval);
+            
             document.getElementById('display-code').textContent = data.room;
             document.getElementById('room-code-display').classList.remove('hidden');
             document.getElementById('lobby-code-text').textContent = data.room;
@@ -468,8 +501,26 @@
             socket.emit('start_game', payload);
         }
 
+        socket.on('countdown', (data) => {
+            let secs = data.seconds;
+            document.getElementById('countdown-number').textContent = secs;
+            document.getElementById('countdown-modal').classList.remove('hidden');
+            clearInterval(countdownInterval);
+            countdownInterval = setInterval(() => {
+                secs--;
+                if (secs > 0) {
+                    document.getElementById('countdown-number').textContent = secs;
+                } else {
+                    clearInterval(countdownInterval);
+                }
+            }, 1000);
+        });
+
         socket.on('game_started', (data) => {
             mySid = socket.id; // Refresh in case of reconnect
+            document.getElementById('countdown-modal').classList.add('hidden');
+            clearInterval(countdownInterval);
+            
             let roleMsg = "";
             if(data.role === 'civil') roleMsg = "Tu es un Civil. Trouve les intrus !";
             else if(data.role === 'zorgor') roleMsg = "Tu es Zorgor. Cache ton identité !";
@@ -537,6 +588,12 @@
             if (me && me.role === null && state.status !== 'lobby') {
                 document.getElementById('my-role-desc').textContent = "Tu es spectateur. Attends la prochaine partie !";
                 document.getElementById('my-secret-word').textContent = "👀";
+            }
+            
+            if (isHost && state.status !== 'game_over' && state.status !== 'lobby') {
+                document.getElementById('host-controls').classList.remove('hidden');
+            } else {
+                document.getElementById('host-controls').classList.add('hidden');
             }
 
             if(state.status === 'game_over') {
@@ -617,7 +674,7 @@
                 if(isSpeaker) {
                     inputArea.classList.add('hidden');
                     hostPassArea.classList.add('hidden');
-                    document.getElementById('modal-secret-word').textContent = me.word;
+                    document.getElementById('modal-secret-word').textContent = document.getElementById('my-secret-word').textContent;
                     document.getElementById('fullscreen-desc-modal').classList.remove('hidden');
                     document.getElementById('my-desc-input-large').focus();
                 } else {

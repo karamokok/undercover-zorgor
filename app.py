@@ -246,14 +246,34 @@ def on_start(data):
     if rooms[room]["host"] != request.sid: return
     
     rooms[room]["settings"] = data
-    start_game_logic(room, data)
+    rooms[room]["status"] = "countdown"
+    socketio.emit('countdown', {'seconds': 5}, room=room)
     
-@socketio.on('play_again')
-def on_play_again():
+    def delayed_start():
+        socketio.sleep(5)
+        if room in rooms and rooms[room]["status"] == "countdown":
+            start_game_logic(room, data)
+            
+    socketio.start_background_task(delayed_start)
+    
+@socketio.on('back_to_lobby')
+def on_back_to_lobby():
     room = sid_to_room.get(request.sid)
     if room and rooms[room]["host"] == request.sid:
-        settings = rooms[room].get("settings", {})
-        start_game_logic(room, settings)
+        rooms[room]["status"] = "lobby"
+        for p in rooms[room]["players"]:
+            p["role"] = None
+            p["word"] = None
+            p["alive"] = True
+        rooms[room]["votes"] = {}
+        rooms[room]["chat_messages"] = []
+        
+        socketio.emit('lobby_update', {
+            'room': room,
+            'host': rooms[room]['host'],
+            'players': [{'sid': p['sid'], 'name': p['name']} for p in rooms[room]['players']]
+        }, room=room)
+        broadcast_state(room)
 
 def start_game_logic(room, settings):
     players = rooms[room]["players"]
