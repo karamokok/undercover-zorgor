@@ -101,13 +101,21 @@
         <!-- LOBBY JOIN -->
         <div id="join-view">
             <h1 class="title-main">UNDERCOVER<br><span class="subtitle">Mode En Ligne</span></h1>
-            <div class="card">
-                <input type="text" id="username" placeholder="Ton pseudo" autocomplete="off" maxlength="15">
-                <input type="text" id="room-code" placeholder="Code du salon (laisser vide pour créer)" autocomplete="off" style="text-transform: uppercase;" maxlength="6">
-                <button class="btn-primary" onclick="joinRoom()">Jouer</button>
-                <button class="btn-danger mt-2" onclick="window.location.href='/'">Retour</button>
-                <p id="join-error" class="text-center mt-2" style="color:var(--color-zorgor);"></p>
+            <div class="card" style="text-align: center; margin-bottom: 1.5rem;">
+                <input type="text" id="username" placeholder="Ton pseudo" autocomplete="off" maxlength="15" style="font-weight:bold; font-size:1.2rem; text-align:center;">
+                
+                <h3 class="mb-2 text-muted mt-2" style="font-size:1rem;">Héberger une partie</h3>
+                <button class="btn-primary" id="btn-create" onclick="createRoom()">Créer un salon</button>
+                
+                <hr style="border-color:rgba(255,255,255,0.1); margin:1.5rem 0;">
+                
+                <h3 class="mb-2 text-muted" style="font-size:1rem;">Rejoindre des amis</h3>
+                <input type="text" id="room-code" placeholder="Code du salon" autocomplete="off" style="text-transform: uppercase; text-align:center; letter-spacing:3px; font-weight:bold;" maxlength="6" class="mb-2">
+                <button class="btn-primary" id="btn-join" style="background:#10b981" onclick="joinRoom()">Rejoindre</button>
+                
+                <p id="join-error" class="text-center mt-2" style="color:var(--color-zorgor); font-weight:bold;"></p>
             </div>
+            <button class="btn-danger" style="background:transparent; border:1px solid rgba(255,255,255,0.2)" onclick="window.location.href='/'">Retour à l'accueil</button>
         </div>
 
         <!-- LOBBY WAIT / SETUP -->
@@ -229,12 +237,24 @@
             }
         });
 
+        function createRoom() {
+            const u = document.getElementById('username').value.trim();
+            if(!u) return alert("Choisis un pseudo !");
+            myUsername = u;
+            document.getElementById('btn-create').textContent = "Connexion...";
+            socket.emit('join_room', { username: u, room: '' });
+            setTimeout(() => { document.getElementById('btn-create').textContent = "Créer un salon"; }, 3000);
+        }
+
         function joinRoom() {
             const u = document.getElementById('username').value.trim();
             const r = document.getElementById('room-code').value.trim().toUpperCase();
             if(!u) return alert("Choisis un pseudo !");
+            if(!r) return alert("Entre un code de salon !");
             myUsername = u;
+            document.getElementById('btn-join').textContent = "Connexion...";
             socket.emit('join_room', { username: u, room: r });
+            setTimeout(() => { document.getElementById('btn-join').textContent = "Rejoindre"; }, 3000);
         }
 
         socket.on('room_error', (data) => {
