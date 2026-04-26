@@ -237,8 +237,12 @@
             </div>
 
             <div class="checkbox-group mt-2">
-                <input type="checkbox" id="setting-mrwhite">
-                <label for="setting-mrwhite">Mr. White ? <span id="mrwhite-note" style="font-size:0.8rem; color:var(--text-muted)"></span></label>
+                <label for="setting-mrwhite"><strong>Nombre de Mr. White</strong></label>
+                <select id="setting-mrwhite" style="margin-left:auto; width:60px;">
+                    <option value="0">0</option>
+                    <option value="1">1</option>
+                    <option value="2">2</option>
+                </select>
             </div>
 
             <div class="checkbox-group">
@@ -435,19 +439,14 @@
         /* --- ENGINE --- */
         const modeSelect = document.getElementById('setting-mode');
         const frSettings = document.getElementById('fr-settings');
-        const mrWhiteCheck = document.getElementById('setting-mrwhite');
-        const mrWhiteNote = document.getElementById('mrwhite-note');
+        const mrWhiteSelect = document.getElementById('setting-mrwhite');
 
         modeSelect.addEventListener('change', (e) => {
             if(e.target.value === 'Nouchi') {
                 frSettings.classList.add('hidden');
-                mrWhiteCheck.checked = true;
-                mrWhiteCheck.disabled = true;
-                mrWhiteNote.textContent = "(Forcé en Nouchi)";
+                if(mrWhiteSelect.value === "0") mrWhiteSelect.value = "1";
             } else {
                 frSettings.classList.remove('hidden');
-                mrWhiteCheck.disabled = false;
-                mrWhiteNote.textContent = "";
             }
         });
 
@@ -480,12 +479,12 @@
         function startGame() {
             const err = document.getElementById('setup-error');
             const n = setupPlayers.length;
-            if(n < 4 || n > 12) { err.textContent = "Il faut entre 4 et 12 joueurs."; return; }
+            if(n < 3 || n > 12) { err.textContent = "Il faut entre 3 et 12 joueurs."; return; }
             err.textContent = "";
 
             const mode = modeSelect.value;
             const dictChoice = document.getElementById('setting-dict').value;
-            const hasMrWhite = mrWhiteCheck.checked;
+            const numMrWhite = parseInt(document.getElementById('setting-mrwhite').value);
             const hasBrasLong = document.getElementById('setting-braslong').checked;
             let numZorgor = parseInt(document.getElementById('setting-zorgor').value);
 
@@ -493,7 +492,7 @@
             let civilWord = "", zorgorWord = "";
 
             if(mode === "Français Classique") {
-                let w = hasMrWhite ? 1 : 0;
+                let w = numMrWhite;
                 let b = hasBrasLong ? 1 : 0;
                 let z = numZorgor;
                 let c = n - z - w - b;
@@ -519,12 +518,13 @@
                 civilWord = pair[0]; zorgorWord = pair[1];
                 if(Math.random() < 0.5) { civilWord = pair[1]; zorgorWord = pair[0]; }
             } else {
-                let w = 1;
+                let w = numMrWhite;
+                if(w < 1) w = 1;
                 let b = hasBrasLong ? 1 : 0;
                 let c = n - w - b;
                 if(c < 1) { err.textContent = "Pas assez de joueurs."; return; }
                 
-                roles.push("mr_white");
+                for(let i=0; i<w; i++) roles.push("mr_white");
                 if(b) roles.push("bras_long");
                 for(let i=0; i<c; i++) roles.push("civil");
                 roles.sort(() => Math.random() - 0.5);

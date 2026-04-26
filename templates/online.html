@@ -148,8 +148,12 @@
                 </div>
 
                 <div class="checkbox-group mt-2">
-                    <input type="checkbox" id="setting-mrwhite">
-                    <label for="setting-mrwhite">Mr. White ?</label>
+                    <label for="setting-mrwhite"><strong>Nombre de Mr. White</strong></label>
+                    <select id="setting-mrwhite" style="margin-left:auto; width:60px;">
+                        <option value="0">0</option>
+                        <option value="1">1</option>
+                        <option value="2">2</option>
+                    </select>
                 </div>
                 <div class="checkbox-group">
                     <input type="checkbox" id="setting-braslong">
@@ -224,16 +228,14 @@
         // DOM Elements
         const modeSelect = document.getElementById('setting-mode');
         const frSettings = document.getElementById('fr-settings');
-        const mrWhiteCheck = document.getElementById('setting-mrwhite');
+        const mrWhiteSelect = document.getElementById('setting-mrwhite');
 
         modeSelect.addEventListener('change', (e) => {
             if(e.target.value === 'Nouchi') {
                 frSettings.classList.add('hidden');
-                mrWhiteCheck.checked = true;
-                mrWhiteCheck.disabled = true;
+                if(mrWhiteSelect.value === "0") mrWhiteSelect.value = "1";
             } else {
                 frSettings.classList.remove('hidden');
-                mrWhiteCheck.disabled = false;
             }
         });
 
@@ -292,7 +294,7 @@
                 mode: document.getElementById('setting-mode').value,
                 num_zorgor: document.getElementById('setting-zorgor').value,
                 dictionary: document.getElementById('setting-dict').value,
-                has_mr_white: mrWhiteCheck.checked,
+                num_mr_white: document.getElementById('setting-mrwhite').value,
                 has_bras_long: document.getElementById('setting-braslong').checked
             };
             socket.emit('start_game', payload);

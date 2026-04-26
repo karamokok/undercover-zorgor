@@ -154,19 +154,19 @@ def on_start(data):
     
     players = rooms[room]["players"]
     n = len(players)
-    if n < 4 or n > 12:
-        socketio.emit('sys_msg', {'msg': 'Il faut entre 4 et 12 joueurs pour jouer.'}, room=room)
+    if n < 3 or n > 12:
+        socketio.emit('sys_msg', {'msg': 'Il faut entre 3 et 12 joueurs pour jouer.'}, room=room)
         return
         
     mode = data.get("mode", "Français Classique")
     num_zorgor = int(data.get("num_zorgor", 1))
-    has_mr_white = data.get("has_mr_white", False)
+    num_mr_white = int(data.get("num_mr_white", 0))
     has_bras_long = data.get("has_bras_long", False)
     dict_choice = data.get("dictionary", "Français")
     
     roles = []
     if mode == "Français Classique":
-        w = 1 if has_mr_white else 0
+        w = num_mr_white
         b = 1 if has_bras_long else 0
         z = num_zorgor
         c = n - z - w - b
@@ -184,7 +184,8 @@ def on_start(data):
         if random.choice([True, False]):
             civil_word, zorgor_word = zorgor_word, civil_word
     else:
-        w = 1
+        w = num_mr_white
+        if w < 1: w = 1
         b = 1 if has_bras_long else 0
         c = n - w - b
         if c < 1:
