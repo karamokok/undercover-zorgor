@@ -300,6 +300,7 @@
             <div class="card" id="gameover-content">
                 <h2 id="winner-text" style="color:var(--primary); font-size:2rem; margin-bottom:1rem;"></h2>
                 <p>La partie est terminée. Le salon reste ouvert.</p>
+                <div id="gameover-roles" class="player-list mt-3" style="text-align: left;"></div>
             </div>
             <div id="host-gameover-controls" class="card hidden" style="margin-top:1rem;">
                 <button class="btn-primary w-full mb-2" onclick="socket.emit('back_to_lobby')">Retour au salon</button>

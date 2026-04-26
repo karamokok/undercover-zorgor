@@ -514,15 +514,20 @@ def on_submit_guess(data):
         state["status"] = "game_over"
         distribute_points(room)
     else:
-        msg_obj = {'sid': 'system', 'sender': 'Système', 'msg': f'Raté ! Le mot était {civil_word}.'}
-        state.setdefault("chat_messages", []).append(msg_obj)
-        socketio.emit('sys_msg', {'msg': msg_obj['msg']}, room=room)
         winner = check_victory(room)
         if winner:
+            msg_obj = {'sid': 'system', 'sender': 'Système', 'msg': f'Raté ! Le mot était {civil_word}.'}
+            state.setdefault("chat_messages", []).append(msg_obj)
+            socketio.emit('sys_msg', {'msg': msg_obj['msg']}, room=room)
+            
             state["winner"] = winner
             state["status"] = "game_over"
             distribute_points(room)
         else:
+            msg_obj = {'sid': 'system', 'sender': 'Système', 'msg': f'Raté ! Mr. White a donné une mauvaise réponse et est définitivement éliminé !'}
+            state.setdefault("chat_messages", []).append(msg_obj)
+            socketio.emit('sys_msg', {'msg': msg_obj['msg']}, room=room)
+            
             start_description_phase(room)
             
     broadcast_state(room)
