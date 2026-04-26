@@ -107,14 +107,15 @@ def on_join(data):
         "name": username,
         "role": None,
         "word": None,
-        "alive": not is_spectator
+        "alive": not is_spectator,
+        "score": 0
     })
     
     if not is_spectator:
         emit('lobby_update', {
             'room': room_code,
             'host': rooms[room_code]['host'],
-            'players': [{'sid': p['sid'], 'name': p['name']} for p in rooms[room_code]['players']]
+            'players': [{'sid': p['sid'], 'name': p['name'], 'score': p.get('score', 0)} for p in rooms[room_code]['players']]
         }, room=room_code)
     else:
         emit('game_started', {'role': None, 'word': None})
@@ -208,7 +209,7 @@ def on_leave_game():
                     emit('lobby_update', {
                         'room': room,
                         'host': rooms[room]['host'],
-                        'players': [{'sid': p['sid'], 'name': p['name']} for p in rooms[room]['players']]
+                        'players': [{'sid': p['sid'], 'name': p['name'], 'score': p.get('score', 0)} for p in rooms[room]['players']]
                     }, room=room)
                 else:
                     player["alive"] = False
@@ -271,7 +272,7 @@ def on_back_to_lobby():
         socketio.emit('lobby_update', {
             'room': room,
             'host': rooms[room]['host'],
-            'players': [{'sid': p['sid'], 'name': p['name']} for p in rooms[room]['players']]
+            'players': [{'sid': p['sid'], 'name': p['name'], 'score': p.get('score', 0)} for p in rooms[room]['players']]
         }, room=room)
         broadcast_state(room)
 
@@ -432,6 +433,18 @@ def on_submit_vote(data):
     else:
         broadcast_state(room)
 
+def distribute_points(room):
+    state = rooms[room]
+    winner = state.get("winner")
+    for p in state["players"]:
+        if p["role"] is None: continue
+        if winner == "civil" and p["role"] in ["civil", "bras_long"]:
+            p["score"] = p.get("score", 0) + 2
+        elif winner == "zorgor" and p["role"] == "zorgor":
+            p["score"] = p.get("score", 0) + 10
+        elif winner == "mr_white" and p["role"] == "mr_white":
+            p["score"] = p.get("score", 0) + 6
+
 def process_votes(room):
     state = rooms[room]
     tally = {}
@@ -475,6 +488,7 @@ def process_votes(room):
         if winner:
             state["winner"] = winner
             state["status"] = "game_over"
+            distribute_points(room)
         else:
             start_description_phase(room)
             
@@ -498,14 +512,16 @@ def on_submit_guess(data):
         socketio.emit('sys_msg', {'msg': msg_obj['msg']}, room=room)
         state["winner"] = "mr_white"
         state["status"] = "game_over"
+        distribute_points(room)
     else:
-        msg_obj = {'sid': 'system', 'sender': 'Système', 'msg': f'Raté ! Mr. White pensait à "{guess}" au lieu de "{civil_word}". Son élimination est confirmée.'}
+        msg_obj = {'sid': 'system', 'sender': 'Système', 'msg': f'Raté ! Le mot était {civil_word}.'}
         state.setdefault("chat_messages", []).append(msg_obj)
         socketio.emit('sys_msg', {'msg': msg_obj['msg']}, room=room)
         winner = check_victory(room)
         if winner:
             state["winner"] = winner
             state["status"] = "game_over"
+            distribute_points(room)
         else:
             start_description_phase(room)
             
@@ -520,7 +536,7 @@ def on_back_to_lobby():
         socketio.emit('lobby_update', {
             'room': room,
             'host': rooms[room]['host'],
-            'players': [{'sid': p['sid'], 'name': p['name']} for p in rooms[room]['players']]
+            'players': [{'sid': p['sid'], 'name': p['name'], 'score': p.get('score', 0)} for p in rooms[room]['players']]
         }, room=room)
 
 def check_victory(room):

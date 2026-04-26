@@ -183,7 +183,9 @@
 
         <!-- LOBBY WAIT / SETUP -->
         <div id="lobby-view" class="card hidden">
-            <button class="leave-btn" onclick="leaveGame()" title="Quitter la salle">🚪</button>
+            <button class="leave-btn" onclick="leaveGame()" title="Quitter la salle">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path><polyline points="16 17 21 12 16 7"></polyline><line x1="21" y1="12" x2="9" y2="12"></line></svg>
+            </button>
             <h2 class="mb-2 text-center" style="margin-top:1rem;">Salon : <span id="lobby-code-text" style="color:var(--primary)"></span></h2>
             <p class="text-center text-muted mb-3">Partage ce code avec tes amis !</p>
             
@@ -234,7 +236,9 @@
 
         <!-- PLAYING VIEW (Word & Action) -->
         <div id="playing-view" class="card hidden">
-            <button class="leave-btn" onclick="leaveGame()" title="Quitter la salle">🚪</button>
+            <button class="leave-btn" onclick="leaveGame()" title="Quitter la salle">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path><polyline points="16 17 21 12 16 7"></polyline><line x1="21" y1="12" x2="9" y2="12"></line></svg>
+            </button>
             <div id="host-controls" class="hidden" style="position:absolute; top:1rem; right:1rem; z-index:100;">
                 <button class="btn-danger" style="padding:0.4rem 1rem; font-size:0.9rem;" onclick="if(confirm('Annuler la partie et retourner au salon ?')) socket.emit('back_to_lobby')">🛑 Arrêter</button>
             </div>
@@ -473,6 +477,7 @@
             list.innerHTML = data.players.map(p => `
                 <li class="player-item">
                     <span>${p.name} ${p.sid === data.host ? '👑' : ''}</span>
+                    <span style="font-size:0.95rem; color:var(--primary); font-weight:800;">${p.score || 0} pts</span>
                 </li>
             `).join('');
 
@@ -604,15 +609,18 @@
                 else if(state.winner === 'mr_white') { wt.textContent = "Victoire de Mr. White !"; wt.style.color = "var(--color-mrwhite)"; }
                 else { wt.textContent = "Égalité !"; wt.style.color = "white"; }
 
-                document.getElementById('gameover-roles').innerHTML = state.players.map(p => {
+                const sortedPlayers = [...state.players].sort((a,b) => (b.score || 0) - (a.score || 0));
+                document.getElementById('gameover-roles').innerHTML = `
+                    <h3 class="mb-2" style="font-size:1.2rem; color:var(--text-muted);">Classement et Rôles</h3>
+                ` + sortedPlayers.map((p, idx) => {
                     let wTxt = "";
                     if(p.role === 'civil' || p.role === 'bras_long') wTxt = `<br><span style="font-size:0.8rem; color:#cbd5e1">Mot: ${state.civil_word}</span>`;
                     if(p.role === 'zorgor') wTxt = `<br><span style="font-size:0.8rem; color:#cbd5e1">Mot: ${state.zorgor_word}</span>`;
                     return `
-                    <li class="player-item ${!p.alive ? 'text-muted' : ''}" style="flex-direction:column; align-items:flex-start; ${!p.alive ? 'opacity:0.5; text-decoration:line-through;' : ''}">
-                        <div style="width:100%; display:flex; justify-content:space-between;">
-                            <span>${p.name}</span>
-                            <span class="role-${p.role}">${formatRole(p.role)}</span>
+                    <li class="player-item ${!p.alive ? 'text-muted' : ''}" style="flex-direction:column; align-items:flex-start; border: 1px solid ${idx===0 && (p.score || 0) > 0 ? 'var(--primary)' : 'rgba(255,255,255,0.1)'};">
+                        <div style="width:100%; display:flex; justify-content:space-between; align-items:center;">
+                            <span>${idx === 0 && (p.score || 0) > 0 ? '🏆 ' : ''}${p.name} <span style="font-size:0.8rem; opacity:0.8" class="role-${p.role}">(${formatRole(p.role)})</span></span>
+                            <span style="color:var(--primary); font-weight:bold; font-size:1.2rem;">${p.score || 0} pts</span>
                         </div>
                         ${wTxt}
                     </li>
