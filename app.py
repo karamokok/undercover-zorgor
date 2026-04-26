@@ -86,14 +86,10 @@ def on_join(data):
     
     if not room_code:
         room_code = generate_room_code()
-        rooms[room_code] = {"players": [], "host": request.sid, "status": "lobby", "votes": {}}
+        rooms[room_code] = {"players": [], "host": request.sid, "status": "lobby", "votes": {}, "chat_messages": []}
     
     if room_code not in rooms:
         emit('room_error', {'msg': 'Salon introuvable !'})
-        return
-        
-    if rooms[room_code]["status"] != "lobby":
-        emit('room_error', {'msg': 'Partie déjà en cours !'})
         return
         
     for p in rooms[room_code]["players"]:
@@ -104,19 +100,26 @@ def on_join(data):
     join_room(room_code)
     sid_to_room[request.sid] = room_code
     
+    is_spectator = rooms[room_code]["status"] != "lobby"
+    
     rooms[room_code]["players"].append({
         "sid": request.sid,
         "name": username,
         "role": None,
         "word": None,
-        "alive": True
+        "alive": not is_spectator
     })
     
-    emit('lobby_update', {
-        'room': room_code,
-        'host': rooms[room_code]['host'],
-        'players': [{'sid': p['sid'], 'name': p['name']} for p in rooms[room_code]['players']]
-    }, room=room_code)
+    if not is_spectator:
+        emit('lobby_update', {
+            'room': room_code,
+            'host': rooms[room_code]['host'],
+            'players': [{'sid': p['sid'], 'name': p['name']} for p in rooms[room_code]['players']]
+        }, room=room_code)
+    else:
+        emit('game_started', {'role': None, 'word': None})
+        emit('chat_history', {'messages': rooms[room_code].get('chat_messages', [])})
+        broadcast_state(room_code)
 
 @socketio.on('rejoin_room')
 def on_rejoin(data):
@@ -175,6 +178,7 @@ def on_rejoin(data):
         }, room=room)
     else:
         emit('game_started', {'role': player['role'], 'word': player['word']})
+        emit('chat_history', {'messages': state.get('chat_messages', [])})
         broadcast_state(room)
 
 @socketio.on('disconnect')
@@ -189,7 +193,10 @@ def on_leave_game():
         player = next((p for p in rooms[room]["players"] if p["sid"] == request.sid), None)
         if player:
             rooms[room]["players"] = [p for p in rooms[room]["players"] if p["sid"] != request.sid]
-            socketio.emit('sys_msg', {'msg': f'{player["name"]} a quitté la salle.'}, room=room)
+            
+            msg_obj = {'sid': 'system', 'sender': 'Système', 'msg': f'{player["name"]} a quitté la salle.'}
+            rooms[room].setdefault("chat_messages", []).append(msg_obj)
+            socketio.emit('sys_msg', {'msg': msg_obj['msg']}, room=room)
             
             if len(rooms[room]["players"]) == 0:
                 del rooms[room]
@@ -226,7 +233,11 @@ def on_chat(data):
     if room and room in rooms:
         player = next((p for p in rooms[room]["players"] if p["sid"] == request.sid), None)
         if player:
-            socketio.emit('chat_msg', {'sid': request.sid, 'sender': player["name"], 'msg': data["msg"]}, room=room)
+            msg_obj = {'sid': request.sid, 'sender': player["name"], 'msg': data["msg"]}
+            rooms[room].setdefault("chat_messages", []).append(msg_obj)
+            if len(rooms[room]["chat_messages"]) > 100:
+                rooms[room]["chat_messages"].pop(0)
+            socketio.emit('chat_msg', msg_obj, room=room)
 
 @socketio.on('start_game')
 def on_start(data):
@@ -292,6 +303,7 @@ def start_game_logic(room, settings):
     rooms[room]["mode"] = mode
     rooms[room]["votes"] = {}
     rooms[room]["descriptions"] = {}
+    rooms[room]["chat_messages"] = []
     rooms[room]["civil_word"] = civil_word
     rooms[room]["zorgor_word"] = zorgor_word
 
@@ -305,6 +317,7 @@ def start_game_logic(room, settings):
         p["word"] = w
         
         socketio.emit('game_started', {'word': w, 'role': r}, room=p["sid"])
+        socketio.emit('chat_history', {'messages': []}, room=p["sid"])
         
     start_description_phase(room)
     broadcast_state(room)
@@ -378,7 +391,9 @@ def on_restart_vote():
     room = sid_to_room.get(request.sid)
     if room and rooms[room]["host"] == request.sid and rooms[room]["status"] == "voting_phase":
         rooms[room]["votes"] = {}
-        socketio.emit('sys_msg', {'msg': "L'hôte a relancé le vote."}, room=room)
+        msg_obj = {'sid': 'system', 'sender': 'Système', 'msg': "L'hôte a relancé le vote."}
+        rooms[room].setdefault("chat_messages", []).append(msg_obj)
+        socketio.emit('sys_msg', {'msg': msg_obj['msg']}, room=room)
         broadcast_state(room)
 
 @socketio.on('submit_vote')
@@ -428,7 +443,9 @@ def process_votes(room):
             elim = p
             break
             
-    socketio.emit('sys_msg', {'msg': f'{elim["name"]} a été éliminé ! Son rôle était : {elim["role"]}'}, room=room)
+    msg_obj = {'sid': 'system', 'sender': 'Système', 'msg': f'{elim["name"]} a été éliminé ! Son rôle était : {elim["role"]}'}
+    state.setdefault("chat_messages", []).append(msg_obj)
+    socketio.emit('sys_msg', {'msg': msg_obj['msg']}, room=room)
     
     if elim["role"] == "mr_white":
         state["status"] = "mr_white_guess"
@@ -456,11 +473,15 @@ def on_submit_guess(data):
     civil_word = state.get("civil_word", "")
     
     if normalize_word(guess) == normalize_word(civil_word):
-        socketio.emit('sys_msg', {'msg': f'Incroyable ! Mr. White ({player["name"]}) a trouvé le mot : {civil_word} ! Victoire des forces cachées !'}, room=room)
+        msg_obj = {'sid': 'system', 'sender': 'Système', 'msg': f'Incroyable ! Mr. White ({player["name"]}) a trouvé le mot : {civil_word} ! Victoire des forces cachées !'}
+        state.setdefault("chat_messages", []).append(msg_obj)
+        socketio.emit('sys_msg', {'msg': msg_obj['msg']}, room=room)
         state["winner"] = "mr_white"
         state["status"] = "game_over"
     else:
-        socketio.emit('sys_msg', {'msg': f'Raté ! Mr. White pensait à "{guess}" au lieu de "{civil_word}". Son élimination est confirmée.'}, room=room)
+        msg_obj = {'sid': 'system', 'sender': 'Système', 'msg': f'Raté ! Mr. White pensait à "{guess}" au lieu de "{civil_word}". Son élimination est confirmée.'}
+        state.setdefault("chat_messages", []).append(msg_obj)
+        socketio.emit('sys_msg', {'msg': msg_obj['msg']}, room=room)
         winner = check_victory(room)
         if winner:
             state["winner"] = winner
