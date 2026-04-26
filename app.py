@@ -3,20 +3,24 @@ eventlet.monkey_patch()
 
 import random
 import string
-import os
-from flask import Flask, render_template, request, send_from_directory
-from flask_socketio import SocketIO, join_room, leave_room, emit
+import unicodedata
+from flask import Flask, render_template, request, jsonify
+from flask_socketio import SocketIO, emit, join_room, leave_room
 
 app = Flask(__name__)
-app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'zorgor_secret_online!')
-socketio = SocketIO(app, cors_allowed_origins="*")
+app.config['SECRET_KEY'] = 'zorgor_secret'
+socketio = SocketIO(app, cors_allowed_origins="*", async_mode='eventlet')
+
+# Store active rooms and players
+rooms = {}
+sid_to_room = {}
 
 FR_PAIRS = [
-    ("Plage", "Mer"), ("Voiture", "Moto"), ("Soleil", "Lune"), ("Chat", "Chien"),
-    ("École", "Université"), ("Pain", "Beurre"), ("Eau", "Jus"), ("Maison", "Appartement"),
-    ("Téléphone", "Ordinateur"), ("Ciel", "Terre"), ("Riz", "Attiéké"), ("Vélo", "Trottinette"),
-    ("Livre", "Cahier"), ("Médecin", "Infirmier"), ("Avion", "Hélicoptère"), ("Pluie", "Orage"),
-    ("Chaussure", "Sandale"), ("Dormir", "Rêver"), ("Manger", "Cuisiner"), ("Rire", "Sourire")
+    ["Plage", "Mer"], ["Voiture", "Moto"], ["Soleil", "Lune"], ["Chat", "Chien"],
+    ["École", "Université"], ["Pain", "Beurre"], ["Eau", "Jus"], ["Maison", "Appartement"],
+    ["Téléphone", "Ordinateur"], ["Ciel", "Terre"], ["Riz", "Attiéké"], ["Vélo", "Trottinette"],
+    ["Livre", "Cahier"], ["Médecin", "Infirmier"], ["Avion", "Hélicoptère"], ["Pluie", "Orage"],
+    ["Chaussure", "Sandale"], ["Dormir", "Rêver"], ["Manger", "Cuisiner"], ["Rire", "Sourire"]
 ]
 
 NOUCHI_WORDS = [
@@ -26,117 +30,91 @@ NOUCHI_WORDS = [
     "Fraya", "Gaou", "Gbairè", "Woro-woro", "DJOULA", "RHDP", "Souayer"
 ]
 
-rooms = {} # { room_code: { host: sid, players: [{sid, name, role, word, alive}], status: str, ... } }
-sid_to_room = {}
-
 def generate_room_code():
-    while True:
-        code = ''.join(random.choices(string.ascii_uppercase + string.digits, k=5))
-        if code not in rooms:
-            return code
+    return ''.join(random.choices(string.ascii_uppercase + string.digits, k=5))
 
-def broadcast_state(room_code):
-    if room_code not in rooms: return
-    state = rooms[room_code]
-    # Remove secret words for broadcasting
-    public_players = []
+def normalize_word(w):
+    return ''.join(c for c in unicodedata.normalize('NFD', w) if unicodedata.category(c) != 'Mn').lower().strip()
+
+def broadcast_state(room):
+    state = rooms[room]
+    safe_players = []
     for p in state["players"]:
-        public_players.append({
+        safe_players.append({
             "sid": p["sid"], "name": p["name"], "alive": p["alive"], 
             "role": p["role"] if not p["alive"] or state["status"] == "game_over" else "?"
         })
         
-    public_state = {
+    s = {
         "status": state["status"],
-        "players": public_players,
-        "has_voted": list(state.get("votes", {}).keys()),
-        "winner": state.get("winner")
+        "players": safe_players,
+        "has_voted": list(state["votes"].keys()),
+        "winner": state.get("winner"),
+        "current_speaker_sid": state.get("current_speaker_sid")
     }
-    socketio.emit('state_update', public_state, room=room_code)
+    
+    # En fin de partie, on envoie aussi les mots à tout le monde
+    if state["status"] == "game_over":
+        s["civil_word"] = state.get("civil_word")
+        s["zorgor_word"] = state.get("zorgor_word")
+        
+    socketio.emit('state_update', s, room=room)
 
-@app.route("/")
+def start_description_phase(room):
+    state = rooms[room]
+    state["status"] = "description_phase"
+    alive_players = [p for p in state["players"] if p["alive"]]
+    if alive_players:
+        state["current_speaker_sid"] = alive_players[0]["sid"]
+    else:
+        state["current_speaker_sid"] = None
+
+@app.route('/')
 def index():
-    return render_template("index.html")
+    return render_template('index.html')
 
-@app.route("/online")
+@app.route('/online')
 def online():
-    return render_template("online.html")
-
-@app.route("/sw.js")
-def sw():
-    return send_from_directory("static", "sw.js", mimetype="application/javascript")
-
-@app.route("/manifest.json")
-def manifest():
-    return send_from_directory("static", "manifest.json", mimetype="application/json")
+    return render_template('online.html')
 
 @socketio.on('join_room')
 def on_join(data):
-    username = data['username']
-    room = data.get('room', '').upper()
+    username = data.get('username')
+    room_code = data.get('room', '').upper()
     
-    if not room:
-        room = generate_room_code()
-        rooms[room] = {
-            "host": request.sid,
-            "players": [],
-            "status": "lobby",
-            "votes": {}
-        }
-    elif room not in rooms:
-        emit('room_error', {'msg': 'Salon introuvable.'})
+    if not room_code:
+        room_code = generate_room_code()
+        rooms[room_code] = {"players": [], "host": request.sid, "status": "lobby", "votes": {}}
+    
+    if room_code not in rooms:
+        emit('room_error', {'msg': 'Salon introuvable !'})
         return
         
-    if rooms[room]["status"] != "lobby" and rooms[room]["status"] != "game_over":
-        emit('room_error', {'msg': 'Partie en cours.'})
+    if rooms[room_code]["status"] != "lobby":
+        emit('room_error', {'msg': 'Partie déjà en cours !'})
         return
         
-    join_room(room)
-    sid_to_room[request.sid] = room
+    for p in rooms[room_code]["players"]:
+        if p["name"] == username:
+            emit('room_error', {'msg': 'Pseudo déjà pris dans ce salon !'})
+            return
+
+    join_room(room_code)
+    sid_to_room[request.sid] = room_code
     
-    # Check if name exists, add number
-    name = username
-    c = 1
-    while any(p['name'] == name for p in rooms[room]['players']):
-        name = f"{username}{c}"
-        c += 1
-        
-    rooms[room]["players"].append({
-        "sid": request.sid, "name": name, "role": "", "word": "", "alive": True
+    rooms[room_code]["players"].append({
+        "sid": request.sid,
+        "name": username,
+        "role": None,
+        "word": None,
+        "alive": True
     })
     
-    socketio.emit('sys_msg', {'msg': f'{name} a rejoint le salon.'}, room=room)
-    
     emit('lobby_update', {
-        'room': room,
-        'host': rooms[room]['host'],
-        'players': [{'sid': p['sid'], 'name': p['name']} for p in rooms[room]['players']]
-    }, room=room)
-
-@socketio.on('disconnect')
-def on_disconnect():
-    room = sid_to_room.get(request.sid)
-    if room and room in rooms:
-        player = next((p for p in rooms[room]["players"] if p["sid"] == request.sid), None)
-        if player:
-            rooms[room]["players"] = [p for p in rooms[room]["players"] if p["sid"] != request.sid]
-            socketio.emit('sys_msg', {'msg': f'{player["name"]} a quitté le salon.'}, room=room)
-            
-            if len(rooms[room]["players"]) == 0:
-                del rooms[room]
-            else:
-                if rooms[room]["host"] == request.sid:
-                    rooms[room]["host"] = rooms[room]["players"][0]["sid"]
-                if rooms[room]["status"] == "lobby":
-                    emit('lobby_update', {
-                        'room': room,
-                        'host': rooms[room]['host'],
-                        'players': [{'sid': p['sid'], 'name': p['name']} for p in rooms[room]['players']]
-                    }, room=room)
-                else:
-                    broadcast_state(room)
-    if request.sid in sid_to_room:
-        del sid_to_room[request.sid]
+        'room': room_code,
+        'host': rooms[room_code]['host'],
+        'players': [{'sid': p['sid'], 'name': p['name']} for p in rooms[room_code]['players']]
+    }, room=room_code)
 
 @socketio.on('rejoin_room')
 def on_rejoin(data):
@@ -168,7 +146,9 @@ def on_rejoin(data):
     if state["host"] == old_sid:
         state["host"] = request.sid
         
-    # Update votes and states
+    if state.get("current_speaker_sid") == old_sid:
+        state["current_speaker_sid"] = request.sid
+        
     new_votes = {}
     for voter_sid, target_sid in state["votes"].items():
         v = request.sid if voter_sid == old_sid else voter_sid
@@ -191,6 +171,49 @@ def on_rejoin(data):
         emit('game_started', {'role': player['role'], 'word': player['word']})
         broadcast_state(room)
 
+@socketio.on('disconnect')
+def on_disconnect():
+    if request.sid in sid_to_room:
+        del sid_to_room[request.sid]
+
+@socketio.on('leave_game')
+def on_leave_game():
+    room = sid_to_room.get(request.sid)
+    if room and room in rooms:
+        player = next((p for p in rooms[room]["players"] if p["sid"] == request.sid), None)
+        if player:
+            rooms[room]["players"] = [p for p in rooms[room]["players"] if p["sid"] != request.sid]
+            socketio.emit('sys_msg', {'msg': f'{player["name"]} a quitté la salle.'}, room=room)
+            
+            if len(rooms[room]["players"]) == 0:
+                del rooms[room]
+            else:
+                if rooms[room]["host"] == request.sid:
+                    rooms[room]["host"] = rooms[room]["players"][0]["sid"]
+                
+                if rooms[room]["status"] == "lobby":
+                    emit('lobby_update', {
+                        'room': room,
+                        'host': rooms[room]['host'],
+                        'players': [{'sid': p['sid'], 'name': p['name']} for p in rooms[room]['players']]
+                    }, room=room)
+                else:
+                    player["alive"] = False
+                    winner = check_victory(room)
+                    if winner:
+                        rooms[room]["winner"] = winner
+                        rooms[room]["status"] = "game_over"
+                    broadcast_state(room)
+        leave_room(room)
+        del sid_to_room[request.sid]
+
+@socketio.on('close_room')
+def on_close_room():
+    room = sid_to_room.get(request.sid)
+    if room and rooms[room]["host"] == request.sid:
+        socketio.emit('room_closed', room=room)
+        del rooms[room]
+
 @socketio.on('send_chat')
 def on_chat(data):
     room = sid_to_room.get(request.sid)
@@ -205,17 +228,28 @@ def on_start(data):
     if not room or room not in rooms: return
     if rooms[room]["host"] != request.sid: return
     
+    rooms[room]["settings"] = data
+    start_game_logic(room, data)
+    
+@socketio.on('play_again')
+def on_play_again():
+    room = sid_to_room.get(request.sid)
+    if room and rooms[room]["host"] == request.sid:
+        settings = rooms[room].get("settings", {})
+        start_game_logic(room, settings)
+
+def start_game_logic(room, settings):
     players = rooms[room]["players"]
     n = len(players)
     if n < 3 or n > 12:
         socketio.emit('sys_msg', {'msg': 'Il faut entre 3 et 12 joueurs pour jouer.'}, room=room)
         return
         
-    mode = data.get("mode", "Français Classique")
-    num_zorgor = int(data.get("num_zorgor", 1))
-    num_mr_white = int(data.get("num_mr_white", 0))
-    has_bras_long = data.get("has_bras_long", False)
-    dict_choice = data.get("dictionary", "Français")
+    mode = settings.get("mode", "Français Classique")
+    num_zorgor = int(settings.get("num_zorgor", 1))
+    num_mr_white = int(settings.get("num_mr_white", 0))
+    has_bras_long = settings.get("has_bras_long", False)
+    dict_choice = settings.get("dictionary", "Français")
     
     roles = []
     if mode == "Français Classique":
@@ -250,8 +284,9 @@ def on_start(data):
         zorgor_word = ""
 
     rooms[room]["mode"] = mode
-    rooms[room]["status"] = "description_phase"
     rooms[room]["votes"] = {}
+    rooms[room]["civil_word"] = civil_word
+    rooms[room]["zorgor_word"] = zorgor_word
 
     for i, p in enumerate(players):
         r = roles[i]
@@ -264,7 +299,32 @@ def on_start(data):
         
         socketio.emit('game_started', {'word': w, 'role': r}, room=p["sid"])
         
+    start_description_phase(room)
     broadcast_state(room)
+
+@socketio.on('next_turn')
+def on_next_turn():
+    room = sid_to_room.get(request.sid)
+    if not room or rooms[room]["status"] != "description_phase": return
+    state = rooms[room]
+    
+    if request.sid != state["host"] and request.sid != state.get("current_speaker_sid"):
+        return
+        
+    alive_players = [p for p in state["players"] if p["alive"]]
+    current_sid = state.get("current_speaker_sid")
+    
+    try:
+        idx = next(i for i, p in enumerate(alive_players) if p["sid"] == current_sid)
+        if idx + 1 < len(alive_players):
+            state["current_speaker_sid"] = alive_players[idx + 1]["sid"]
+            broadcast_state(room)
+        else:
+            state["status"] = "voting_phase"
+            state["votes"] = {}
+            broadcast_state(room)
+    except StopIteration:
+        pass
 
 @socketio.on('trigger_vote')
 def on_trigger_vote():
@@ -272,6 +332,14 @@ def on_trigger_vote():
     if room and rooms[room]["host"] == request.sid:
         rooms[room]["status"] = "voting_phase"
         rooms[room]["votes"] = {}
+        broadcast_state(room)
+
+@socketio.on('restart_vote')
+def on_restart_vote():
+    room = sid_to_room.get(request.sid)
+    if room and rooms[room]["host"] == request.sid and rooms[room]["status"] == "voting_phase":
+        rooms[room]["votes"] = {}
+        socketio.emit('sys_msg', {'msg': "L'hôte a relancé le vote."}, room=room)
         broadcast_state(room)
 
 @socketio.on('submit_vote')
@@ -314,6 +382,7 @@ def process_votes(room):
         if bras_long_vote and bras_long_vote in tied: elim_sid = bras_long_vote
         else: elim_sid = random.choice(tied)
             
+    elim = None
     for p in state["players"]:
         if p["sid"] == elim_sid:
             p["alive"] = False
@@ -322,41 +391,44 @@ def process_votes(room):
             
     socketio.emit('sys_msg', {'msg': f'{elim["name"]} a été éliminé ! Son rôle était : {elim["role"]}'}, room=room)
     
-    winner = check_victory(room)
-    if winner:
-        state["winner"] = winner
-        state["status"] = "game_over"
+    if elim["role"] == "mr_white":
+        state["status"] = "mr_white_guess"
+        state["eliminated_mr_white"] = elim_sid
     else:
-        if state["mode"] == "Nouchi" and elim["role"] == "mr_white":
-            state["status"] = "vengeance_phase"
-            state["eliminated_mr_white"] = elim_sid
+        winner = check_victory(room)
+        if winner:
+            state["winner"] = winner
+            state["status"] = "game_over"
         else:
-            state["status"] = "description_phase"
+            start_description_phase(room)
             
     broadcast_state(room)
 
-@socketio.on('submit_vengeance')
-def on_submit_vengeance(data):
+@socketio.on('submit_guess')
+def on_submit_guess(data):
     room = sid_to_room.get(request.sid)
-    if not room or rooms[room]["status"] != "vengeance_phase": return
+    if not room or rooms[room]["status"] != "mr_white_guess": return
     
-    target_sid = data.get('target')
     state = rooms[room]
     if request.sid != state.get("eliminated_mr_white"): return
     
-    for p in state["players"]:
-        if p["sid"] == target_sid:
-            p["alive"] = False
-            socketio.emit('sys_msg', {'msg': f'Dernier Souffle ! Mr. White a emporté {p["name"]} ! Son rôle était : {p["role"]}'}, room=room)
-            break
-            
-    winner = check_victory(room)
-    if winner:
-        state["winner"] = winner
+    guess = data.get("guess", "")
+    player = next((p for p in state["players"] if p["sid"] == request.sid), None)
+    civil_word = state.get("civil_word", "")
+    
+    if normalize_word(guess) == normalize_word(civil_word):
+        socketio.emit('sys_msg', {'msg': f'Incroyable ! Mr. White ({player["name"]}) a trouvé le mot : {civil_word} ! Victoire des forces cachées !'}, room=room)
+        state["winner"] = "mr_white"
         state["status"] = "game_over"
     else:
-        state["status"] = "description_phase"
-        
+        socketio.emit('sys_msg', {'msg': f'Raté ! Mr. White pensait à "{guess}" au lieu de "{civil_word}". Son élimination est confirmée.'}, room=room)
+        winner = check_victory(room)
+        if winner:
+            state["winner"] = winner
+            state["status"] = "game_over"
+        else:
+            start_description_phase(room)
+            
     broadcast_state(room)
 
 @socketio.on('back_to_lobby')
