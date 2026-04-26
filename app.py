@@ -138,6 +138,59 @@ def on_disconnect():
     if request.sid in sid_to_room:
         del sid_to_room[request.sid]
 
+@socketio.on('rejoin_room')
+def on_rejoin(data):
+    username = data.get('username')
+    room = data.get('room', '').upper()
+    
+    if not room or room not in rooms:
+        emit('rejoin_failed')
+        return
+        
+    state = rooms[room]
+    player = None
+    for p in state["players"]:
+        if p["name"] == username:
+            player = p
+            break
+            
+    if not player:
+        emit('rejoin_failed')
+        return
+        
+    old_sid = player["sid"]
+    player["sid"] = request.sid
+    sid_to_room[request.sid] = room
+    
+    if old_sid in sid_to_room:
+        del sid_to_room[old_sid]
+        
+    if state["host"] == old_sid:
+        state["host"] = request.sid
+        
+    # Update votes and states
+    new_votes = {}
+    for voter_sid, target_sid in state["votes"].items():
+        v = request.sid if voter_sid == old_sid else voter_sid
+        t = request.sid if target_sid == old_sid else target_sid
+        new_votes[v] = t
+    state["votes"] = new_votes
+    
+    if state.get("eliminated_mr_white") == old_sid:
+        state["eliminated_mr_white"] = request.sid
+        
+    join_room(room)
+    
+    if state["status"] == "lobby":
+        emit('lobby_update', {
+            'room': room,
+            'host': state['host'],
+            'players': [{'sid': p['sid'], 'name': p['name']} for p in state['players']]
+        }, room=room)
+    else:
+        emit('game_started', {'role': player['role'], 'word': player['word']})
+        broadcast_state(room)
+
 @socketio.on('send_chat')
 def on_chat(data):
     room = sid_to_room.get(request.sid)

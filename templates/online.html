@@ -215,9 +215,25 @@
 
     <script>
         const socket = io();
-        let myUsername = "";
+        let myUsername = sessionStorage.getItem('myUsername') || "";
+        let myRoom = sessionStorage.getItem('myRoom') || "";
         let isHost = false;
         let mySid = null;
+
+        // Auto-reconnect
+        socket.on('connect', () => {
+            if (myUsername && myRoom) {
+                socket.emit('rejoin_room', { username: myUsername, room: myRoom });
+            }
+        });
+
+        socket.on('rejoin_failed', () => {
+            sessionStorage.removeItem('myUsername');
+            sessionStorage.removeItem('myRoom');
+            myUsername = "";
+            myRoom = "";
+            showView('join-view');
+        });
 
         const views = ['join-view', 'lobby-view', 'playing-view', 'gameover-view'];
         function showView(id) {
@@ -243,6 +259,7 @@
             const u = document.getElementById('username').value.trim();
             if(!u) return alert("Choisis un pseudo !");
             myUsername = u;
+            sessionStorage.setItem('myUsername', u);
             document.getElementById('btn-create').textContent = "Connexion...";
             socket.emit('join_room', { username: u, room: '' });
             setTimeout(() => { document.getElementById('btn-create').textContent = "Créer un salon"; }, 3000);
@@ -254,6 +271,8 @@
             if(!u) return alert("Choisis un pseudo !");
             if(!r) return alert("Entre un code de salon !");
             myUsername = u;
+            sessionStorage.setItem('myUsername', u);
+            sessionStorage.setItem('myRoom', r);
             document.getElementById('btn-join').textContent = "Connexion...";
             socket.emit('join_room', { username: u, room: r });
             setTimeout(() => { document.getElementById('btn-join').textContent = "Rejoindre"; }, 3000);
@@ -264,6 +283,9 @@
         });
 
         socket.on('lobby_update', (data) => {
+            myRoom = data.room;
+            sessionStorage.setItem('myRoom', data.room);
+            
             document.getElementById('display-code').textContent = data.room;
             document.getElementById('room-code-display').classList.remove('hidden');
             document.getElementById('lobby-code-text').textContent = data.room;
