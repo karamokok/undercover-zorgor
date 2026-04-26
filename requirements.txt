@@ -1,0 +1,5 @@
+Flask==3.0.0
+pysqlite3
+Flask-SocketIO
+eventlet
+gunicorn

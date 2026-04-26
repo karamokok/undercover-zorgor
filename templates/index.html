@@ -1,0 +1,552 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Undercover - Édition Zorgor</title>
+    <link rel="manifest" href="/manifest.json">
+    <meta name="theme-color" content="#f97316">
+    <link rel="icon" href="/static/icon.svg" type="image/svg+xml">
+    <link rel="apple-touch-icon" href="/static/icon.svg">
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;800;900&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg: #0f172a;
+            --surface: rgba(30, 41, 59, 0.7);
+            --primary: #8b5cf6;
+            --primary-hover: #7c3aed;
+            --danger: #ef4444;
+            --text: #f8fafc;
+            --text-muted: #cbd5e1;
+            
+            --color-zorgor: #ef4444;
+            --color-mrwhite: #fcd34d;
+            --color-bras: #60a5fa;
+            --color-civil: #34d399;
+        }
+        
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            font-family: 'Outfit', sans-serif;
+        }
+
+        body {
+            background-color: var(--bg);
+            color: var(--text);
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            background-image: radial-gradient(circle at top right, #312e81, transparent 40%),
+                              radial-gradient(circle at bottom left, #4c1d95, transparent 40%);
+            background-attachment: fixed;
+        }
+
+        #app {
+            width: 100%;
+            max-width: 500px;
+            padding: 2rem 1.5rem;
+            display: flex;
+            flex-direction: column;
+            gap: 1.5rem;
+        }
+
+        h1, .title-main {
+            text-align: center;
+            font-size: 2.5rem;
+            font-weight: 800;
+            background: linear-gradient(to right, #a78bfa, #f472b6);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            margin-bottom: 1rem;
+            text-shadow: 0 4px 20px rgba(167, 139, 250, 0.3);
+        }
+        .subtitle { font-size: 1.2rem; display: block; font-weight: 600; color: #cbd5e1; -webkit-text-fill-color: #cbd5e1; background: none; text-shadow: none; }
+
+        .card {
+            background: var(--surface);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 1.5rem;
+            padding: 2rem;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
+            animation: fadeIn 0.4s ease-out;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .hidden { display: none !important; }
+
+        input[type="text"] {
+            width: 100%;
+            padding: 1rem;
+            margin-bottom: 1rem;
+            border-radius: 0.75rem;
+            border: 1px solid rgba(255,255,255,0.2);
+            background: rgba(0,0,0,0.2);
+            color: white;
+            font-size: 1.1rem;
+            outline: none;
+            transition: border-color 0.3s;
+        }
+
+        input[type="text"]:focus {
+            border-color: var(--primary);
+        }
+        
+        select {
+            width: 100%; padding: 0.8rem; margin-bottom: 1rem;
+            border-radius: 0.75rem; border: 1px solid rgba(255,255,255,0.2);
+            font-size: 1rem; outline: none; background: rgba(0,0,0,0.4); color: white;
+        }
+        select option { background: var(--bg); }
+
+        .checkbox-group { display: flex; align-items: center; gap: 0.5rem; margin-bottom: 1rem; font-weight: 600; }
+        .checkbox-group input { width: 1.2rem; height: 1.2rem; cursor: pointer; }
+
+        button {
+            width: 100%;
+            padding: 1rem;
+            border: none;
+            border-radius: 0.75rem;
+            background: var(--primary);
+            color: white;
+            font-size: 1.1rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s;
+            box-shadow: 0 4px 15px rgba(139, 92, 246, 0.4);
+            margin-bottom: 0.5rem;
+        }
+
+        button:hover {
+            background: var(--primary-hover);
+            transform: translateY(-2px);
+        }
+        
+        button.btn-danger {
+            background: var(--danger);
+            box-shadow: 0 4px 15px rgba(239, 68, 68, 0.4);
+        }
+        button.btn-disabled { background: rgba(255,255,255,0.1); box-shadow: none; cursor: not-allowed; color: var(--text-muted); }
+
+        .player-list {
+            list-style: none;
+            margin-bottom: 1.5rem;
+            display: flex; flex-direction: column; gap: 0.5rem;
+        }
+
+        .player-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 1rem;
+            background: rgba(255,255,255,0.05);
+            border-radius: 0.75rem;
+            transition: background 0.3s;
+            color: white;
+            font-weight: 600;
+            font-size: 1.1rem;
+        }
+        
+        button.player-item {
+            width: 100%;
+            border: 1px solid rgba(255,255,255,0.1);
+            background: rgba(255,255,255,0.05);
+            box-shadow: none;
+            color: white;
+            justify-content: center;
+        }
+        
+        button.player-item:hover {
+            background: rgba(255,255,255,0.15);
+            transform: translateY(-2px);
+            border-color: var(--primary);
+        }
+
+        .role-zorgor { color: var(--color-zorgor); font-weight: 800; }
+        .role-mr_white { color: var(--color-mrwhite); font-weight: 800; }
+        .role-bras_long { color: var(--color-bras); font-weight: 800; }
+        .role-civil { color: var(--color-civil); font-weight: 800; }
+
+        .text-center { text-align: center; }
+        .mb-1 { margin-bottom: 0.5rem; }
+        .mb-2 { margin-bottom: 1rem; }
+        .mb-3 { margin-bottom: 1.5rem; }
+        .mt-2 { margin-top: 1rem; }
+        .text-muted { color: var(--text-muted); }
+
+        .secret-word-display {
+            font-size: 2.5rem; font-weight: 800; color: #f472b6;
+            text-align: center; margin: 2rem 0; word-break: break-word;
+        }
+        
+        .timer-bar { height: 4px; background: var(--primary); width: 100%; transition: width 1s linear; border-radius: 2px; }
+    </style>
+</head>
+<body>
+    <div id="app">
+        <!-- HOME -->
+        <div id="home-view" class="hidden">
+            <h1 class="title-main">UNDERCOVER<br><span class="subtitle">Édition Zorgor</span></h1>
+            <div class="card">
+                <button class="btn-primary mb-2" onclick="window.location.href='/online'">🌍 Mode Online</button>
+                <button class="btn-primary mb-2" onclick="showView('setup-view')">👥 Mode Multi-téléphones</button>
+                <button class="btn-primary" style="background:#15803d" onclick="window.location.href='/static/hotseat.html'">📱 Mode Hot-seat</button>
+            </div>
+        </div>
+
+        <!-- SETUP -->
+        <div id="setup-view" class="card hidden">
+            <h2 class="mb-3 text-center">Configuration</h2>
+            
+            <label><strong>Mode de jeu</strong></label>
+            <select id="setting-mode" class="mb-2">
+                <option value="Français Classique">Français Classique</option>
+                <option value="Nouchi">Nouchi</option>
+            </select>
+
+            <div id="fr-settings">
+                <label><strong>Nombre de Zorgor</strong></label>
+                <select id="setting-zorgor">
+                    <option value="1">1</option><option value="2">2</option><option value="3">3</option>
+                </select>
+                
+                <label><strong>Dictionnaire</strong></label>
+                <select id="setting-dict">
+                    <option value="Français">Français</option>
+                    <option value="Nouchi">Nouchi</option>
+                    <option value="Mélangé">Mélangé</option>
+                </select>
+            </div>
+
+            <div class="checkbox-group mt-2">
+                <input type="checkbox" id="setting-mrwhite">
+                <label for="setting-mrwhite">Mr. White ? <span id="mrwhite-note" style="font-size:0.8rem; color:var(--text-muted)"></span></label>
+            </div>
+
+            <div class="checkbox-group">
+                <input type="checkbox" id="setting-braslong">
+                <label for="setting-braslong">Bras long ?</label>
+            </div>
+
+            <hr style="margin: 1.5rem 0; border: none; border-top: 1px solid rgba(255,255,255,0.1)">
+
+            <h3 class="mb-2">Joueurs (<span id="player-count">0</span>/12)</h3>
+            <div style="display:flex; gap:0.5rem; margin-bottom: 1rem;">
+                <input type="text" id="player-name" placeholder="Nom du joueur" autocomplete="off" style="margin:0" onkeypress="if(event.key==='Enter') addPlayer()">
+                <button onclick="addPlayer()" style="width:auto; margin:0">Ajouter</button>
+            </div>
+            
+            <ul class="player-list" id="setup-player-list"></ul>
+
+            <button class="btn-primary mt-2" onclick="startGame()" id="start-btn">Démarrer la partie</button>
+            <p id="setup-error" style="color:var(--color-zorgor); text-align:center; margin-top:1rem;"></p>
+        </div>
+
+        <!-- REVEAL -->
+        <div id="reveal-view" class="card hidden text-center">
+            <h2 class="mb-1">Au tour de :</h2>
+            <h1 class="mb-3" id="reveal-name" style="font-size:2.5rem; color:var(--primary)"></h1>
+            
+            <div id="reveal-hidden-state">
+                <p class="mb-3 text-muted">Passez le téléphone à cette personne.</p>
+                <button class="btn-primary" onclick="showWord()">Voir mon rôle</button>
+            </div>
+            
+            <div id="reveal-shown-state" class="hidden">
+                <div class="secret-word-display" id="reveal-word"></div>
+                <div style="width:100%; background:rgba(0,0,0,0.2); border-radius:2px; margin-bottom:1.5rem;">
+                    <div id="reveal-timer" class="timer-bar"></div>
+                </div>
+                <p class="text-muted mb-2">Mémorise-le bien et cache l'écran !</p>
+                <button onclick="nextReveal()">C'est mémorisé</button>
+            </div>
+        </div>
+
+        <!-- DESCRIPTION INPUT -->
+        <div id="desc-input-view" class="card hidden text-center">
+            <h2 class="mb-3">🗣️ Phase de description</h2>
+            <p class="mb-2" style="font-size:1.1rem;">Au tour de <strong id="desc-name" style="color:var(--primary); font-size:1.4rem;"></strong> de décrire son mot à voix haute.</p>
+            <p class="text-muted mb-3" style="font-size:0.95rem;">(Cliquez sur le bouton quand la description est terminée)</p>
+            <button class="btn-primary" onclick="submitDesc()">Joueur suivant</button>
+        </div>
+
+        <!-- VOTING INPUT -->
+        <div id="vote-input-view" class="card hidden text-center">
+            <h2 class="mb-1">Tour de vote</h2>
+            <p class="mb-3 text-muted"><strong id="vote-name" style="color:var(--primary)"></strong>, élimine un suspect :</p>
+            <div id="vote-target-list" class="player-list"></div>
+        </div>
+
+        <!-- VOTING RESULT -->
+        <div id="vote-result-view" class="card hidden text-center">
+            <h2 class="mb-3">Résultat du vote</h2>
+            <h1 id="eliminated-name" class="mb-1" style="font-size:2.5rem; color:var(--danger)"></h1>
+            <p id="eliminated-role" class="mb-3" style="font-size:1.2rem;"></p>
+            <button class="btn-primary" onclick="nextRound()">Tour suivant</button>
+        </div>
+
+        <!-- VENGEANCE -->
+        <div id="vengeance-view" class="card hidden text-center">
+            <h2 class="mb-1" style="color:var(--color-mrwhite)">Dernier Souffle !</h2>
+            <p class="mb-3 text-muted"><strong id="vengeance-name"></strong>, tu as été éliminé. Choisis quelqu'un à emporter avec toi !</p>
+            <div id="vengeance-target-list" class="player-list"></div>
+        </div>
+
+        <!-- GAME OVER -->
+        <div id="gameover-view" class="card hidden text-center">
+            <h1 class="mb-2" id="winner-text" style="font-size:2.5rem;"></h1>
+            <p class="mb-3 text-muted">La partie est terminée.</p>
+            <div id="gameover-roles" class="player-list mb-3"></div>
+            <button class="btn-primary" onclick="resetGame()">Retour à l'accueil</button>
+        </div>
+
+    </div>
+
+    <script>
+        // State
+        const setupPlayers = [];
+        let gameState = null;
+
+        // Elements
+        const views = ['home-view', 'setup-view', 'reveal-view', 'desc-input-view', 'vote-input-view', 'vote-result-view', 'vengeance-view', 'gameover-view'];
+        
+        function showView(id) {
+            views.forEach(v => {
+                const el = document.getElementById(v);
+                if(el) el.classList.add('hidden');
+            });
+            const target = document.getElementById(id);
+            if(target) target.classList.remove('hidden');
+        }
+
+        // --- SETUP ---
+        const modeSelect = document.getElementById('setting-mode');
+        const frSettings = document.getElementById('fr-settings');
+        const mrWhiteCheck = document.getElementById('setting-mrwhite');
+        const mrWhiteNote = document.getElementById('mrwhite-note');
+
+        modeSelect.addEventListener('change', (e) => {
+            if(e.target.value === 'Nouchi') {
+                frSettings.classList.add('hidden');
+                mrWhiteCheck.checked = true;
+                mrWhiteCheck.disabled = true;
+                mrWhiteNote.textContent = "(Forcé en Nouchi)";
+            } else {
+                frSettings.classList.remove('hidden');
+                mrWhiteCheck.disabled = false;
+                mrWhiteNote.textContent = "";
+            }
+        });
+
+        function addPlayer() {
+            const input = document.getElementById('player-name');
+            const name = input.value.trim();
+            if(name && !setupPlayers.includes(name)) {
+                setupPlayers.push(name);
+                input.value = '';
+                renderSetupList();
+            }
+        }
+
+        function removePlayer(idx) {
+            setupPlayers.splice(idx, 1);
+            renderSetupList();
+        }
+
+        function renderSetupList() {
+            const list = document.getElementById('setup-player-list');
+            list.innerHTML = setupPlayers.map((p, i) => `
+                <li class="player-item">
+                    <span>${p}</span>
+                    <button style="width:auto; padding:0.4rem 0.8rem; background:rgba(239, 68, 68, 0.8); margin:0; border-radius:0.5rem; font-size:0.9rem;" onclick="removePlayer(${i})">X</button>
+                </li>
+            `).join('');
+            document.getElementById('player-count').textContent = setupPlayers.length;
+        }
+
+        async function startGame() {
+            const err = document.getElementById('setup-error');
+            if(setupPlayers.length < 4 || setupPlayers.length > 12) {
+                err.textContent = "Il faut entre 4 et 12 joueurs.";
+                return;
+            }
+            err.textContent = "";
+
+            const payload = {
+                players: setupPlayers,
+                mode: modeSelect.value,
+                num_zorgor: document.getElementById('setting-zorgor').value,
+                dictionary: document.getElementById('setting-dict').value,
+                has_mr_white: mrWhiteCheck.checked,
+                has_bras_long: document.getElementById('setting-braslong').checked
+            };
+
+            const res = await fetch('/api/setup', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify(payload)
+            });
+            const data = await res.json();
+            if(data.error) { err.textContent = data.error; return; }
+            updateState(data);
+        }
+
+        // --- GAME LOOP ---
+        function updateState(state) {
+            if (state.error) {
+                console.error(state.error);
+                showView('home-view');
+                return;
+            }
+            gameState = state;
+            if(state.status === 'home') {
+                showView('home-view');
+            } else if(state.status === 'showing_word') {
+                showView('reveal-view');
+                document.getElementById('reveal-hidden-state').classList.remove('hidden');
+                document.getElementById('reveal-shown-state').classList.add('hidden');
+                document.getElementById('reveal-name').textContent = state.players[state.current_idx].name;
+            } else if(state.status === 'description_input') {
+                showView('desc-input-view');
+                document.getElementById('desc-name').textContent = state.players[state.current_idx].name;
+            } else if(state.status === 'description_view') {
+                // Skip description view directly to voting
+                startVote();
+            } else if(state.status === 'voting_input') {
+                showView('vote-input-view');
+                const voter = state.players[state.current_idx];
+                document.getElementById('vote-name').textContent = voter.name;
+                
+                const list = document.getElementById('vote-target-list');
+                list.innerHTML = state.players.filter(p => p.alive && p.id !== voter.id).map(p => `
+                    <button class="player-item" onclick="submitVote(${p.id})">${p.name}</button>
+                `).join('');
+            } else if(state.status === 'voting_result') {
+                showView('vote-result-view');
+                if(!state.eliminated_this_round) {
+                    document.getElementById('eliminated-name').textContent = "Personne !";
+                    document.getElementById('eliminated-role').innerHTML = "Égalité parfaite.";
+                } else {
+                    const p = state.eliminated_this_round;
+                    document.getElementById('eliminated-name').textContent = p.name;
+                    document.getElementById('eliminated-role').innerHTML = `Rôle : <span class="role-${p.role}">${formatRole(p.role)}</span>`;
+                }
+            } else if(state.status === 'vengeance') {
+                showView('vengeance-view');
+                const mw = state.eliminated_this_round;
+                document.getElementById('vengeance-name').textContent = mw.name;
+                const list = document.getElementById('vengeance-target-list');
+                list.innerHTML = state.players.filter(p => p.alive).map(p => `
+                    <button class="player-item" style="border-color:var(--danger)" onclick="submitVengeance(${p.id})">Éliminer ${p.name}</button>
+                `).join('');
+            } else if(state.status === 'game_over') {
+                showView('gameover-view');
+                const wt = document.getElementById('winner-text');
+                if(state.winner === 'civil') { wt.textContent = "Victoire des Civils !"; wt.style.color = "var(--color-civil)"; }
+                else if(state.winner === 'zorgor') { wt.textContent = "Victoire des Zorgors !"; wt.style.color = "var(--color-zorgor)"; }
+                else if(state.winner === 'mr_white') { wt.textContent = "Victoire de Mr. White !"; wt.style.color = "var(--color-mrwhite)"; }
+                else { wt.textContent = "Égalité !"; wt.style.color = "white"; }
+
+                document.getElementById('gameover-roles').innerHTML = state.players.map(p => `
+                    <li class="player-item ${!p.alive ? 'text-muted' : ''}" style="${!p.alive ? 'opacity:0.5; text-decoration:line-through; justify-content:space-between;' : 'justify-content:space-between;'}">
+                        <span>${p.name}</span>
+                        <span class="role-${p.role}">${formatRole(p.role)}</span>
+                    </li>
+                `).join('');
+            }
+        }
+
+        function showWord() {
+            document.getElementById('reveal-hidden-state').classList.add('hidden');
+            document.getElementById('reveal-shown-state').classList.remove('hidden');
+            document.getElementById('reveal-word').textContent = gameState.players[gameState.current_idx].word;
+            
+            const timer = document.getElementById('reveal-timer');
+            timer.style.transition = 'none';
+            timer.style.width = '100%';
+            setTimeout(() => {
+                timer.style.transition = 'width 5s linear';
+                timer.style.width = '0%';
+            }, 50);
+        }
+
+        async function nextReveal() {
+            const res = await fetch('/api/reveal_next', {method: 'POST'});
+            updateState(await res.json());
+        }
+
+        async function submitDesc() {
+            const res = await fetch('/api/submit_description', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({description: ""})
+            });
+            updateState(await res.json());
+        }
+
+        async function startVote() {
+            const res = await fetch('/api/start_vote', {method: 'POST'});
+            updateState(await res.json());
+        }
+
+        async function submitVote(target_id) {
+            const res = await fetch('/api/submit_vote', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({target_id})
+            });
+            updateState(await res.json());
+        }
+
+        async function submitVengeance(target_id) {
+            const res = await fetch('/api/submit_vengeance', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({target_id})
+            });
+            updateState(await res.json());
+        }
+
+        async function nextRound() {
+            const res = await fetch('/api/next_round', {method: 'POST'});
+            updateState(await res.json());
+        }
+
+        async function resetGame() {
+            setupPlayers.length = 0;
+            renderSetupList();
+            const res = await fetch('/api/reset', {method: 'POST'});
+            updateState(await res.json());
+        }
+
+        function formatRole(r) {
+            if(r === 'mr_white') return 'Mr. White';
+            if(r === 'bras_long') return 'Bras long';
+            if(r === 'zorgor') return 'Zorgor';
+            return 'Civil';
+        }
+
+        // Init
+        resetGame();
+
+        // Register Service Worker
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', () => {
+                navigator.serviceWorker.register('/sw.js').then(reg => {
+                    console.log('Service Worker enregistré', reg.scope);
+                }).catch(err => {
+                    console.log('Erreur Service Worker:', err);
+                });
+            });
+        }
+    </script>
+</body>
+</html>

@@ -1,0 +1,411 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Undercover - Mode En Ligne</title>
+    <link rel="manifest" href="/manifest.json">
+    <meta name="theme-color" content="#f97316">
+    <link rel="icon" href="/static/icon.svg" type="image/svg+xml">
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;800;900&display=swap" rel="stylesheet">
+    <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
+    <style>
+        :root {
+            --bg: #0f172a; --surface: rgba(30, 41, 59, 0.7);
+            --primary: #8b5cf6; --primary-hover: #7c3aed;
+            --danger: #ef4444; --text: #f8fafc; --text-muted: #cbd5e1;
+            --color-zorgor: #ef4444; --color-mrwhite: #fcd34d;
+            --color-bras: #60a5fa; --color-civil: #34d399;
+        }
+        * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Outfit', sans-serif; }
+        body {
+            background-color: var(--bg); color: var(--text); min-height: 100vh;
+            display: flex; flex-direction: column; align-items: center;
+            background-image: radial-gradient(circle at top right, #312e81, transparent 40%),
+                              radial-gradient(circle at bottom left, #4c1d95, transparent 40%);
+            background-attachment: fixed;
+        }
+        #app { width: 100%; max-width: 500px; padding: 2rem 1.5rem; display: flex; flex-direction: column; gap: 1.5rem; }
+        h1, .title-main {
+            text-align: center; font-size: 2.5rem; font-weight: 800;
+            background: linear-gradient(to right, #a78bfa, #f472b6);
+            -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+            margin-bottom: 1rem; text-shadow: 0 4px 20px rgba(167, 139, 250, 0.3);
+        }
+        .subtitle { font-size: 1.2rem; display: block; font-weight: 600; color: #cbd5e1; -webkit-text-fill-color: #cbd5e1; background: none; text-shadow: none; }
+        .card {
+            background: var(--surface); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);
+            border: 1px solid rgba(255, 255, 255, 0.1); border-radius: 1.5rem; padding: 2rem;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2); animation: fadeIn 0.4s ease-out;
+        }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+        .hidden { display: none !important; }
+        input[type="text"] {
+            width: 100%; padding: 1rem; margin-bottom: 1rem; border-radius: 0.75rem;
+            border: 1px solid rgba(255,255,255,0.2); background: rgba(0,0,0,0.2);
+            color: white; font-size: 1.1rem; outline: none; transition: border-color 0.3s;
+        }
+        input[type="text"]:focus { border-color: var(--primary); }
+        select {
+            width: 100%; padding: 0.8rem; margin-bottom: 1rem; border-radius: 0.75rem;
+            border: 1px solid rgba(255,255,255,0.2); font-size: 1rem; outline: none; background: rgba(0,0,0,0.4); color: white;
+        }
+        select option { background: var(--bg); }
+        .checkbox-group { display: flex; align-items: center; gap: 0.5rem; margin-bottom: 1rem; font-weight: 600; }
+        .checkbox-group input { width: 1.2rem; height: 1.2rem; cursor: pointer; }
+        button {
+            width: 100%; padding: 1rem; border: none; border-radius: 0.75rem;
+            background: var(--primary); color: white; font-size: 1.1rem; font-weight: 600;
+            cursor: pointer; transition: all 0.3s; box-shadow: 0 4px 15px rgba(139, 92, 246, 0.4);
+            margin-bottom: 0.5rem;
+        }
+        button:hover { background: var(--primary-hover); transform: translateY(-2px); }
+        .btn-danger { background: var(--danger); box-shadow: 0 4px 15px rgba(239, 68, 68, 0.4); }
+        .btn-disabled { background: rgba(255,255,255,0.1); box-shadow: none; cursor: not-allowed; color: var(--text-muted); }
+        .player-list { list-style: none; margin-bottom: 1.5rem; display: flex; flex-direction: column; gap: 0.5rem; }
+        .player-item {
+            display: flex; justify-content: space-between; align-items: center;
+            padding: 1rem; background: rgba(255,255,255,0.05); border-radius: 0.75rem;
+            transition: background 0.3s; color: white; font-weight: 600; font-size: 1.1rem;
+        }
+        button.player-item { width: 100%; border: 1px solid rgba(255,255,255,0.1); background: rgba(255,255,255,0.05); box-shadow: none; color: white; justify-content: center; }
+        button.player-item:hover { background: rgba(255,255,255,0.15); transform: translateY(-2px); border-color: var(--primary); }
+        .role-zorgor { color: var(--color-zorgor); font-weight: 800; }
+        .role-mr_white { color: var(--color-mrwhite); font-weight: 800; }
+        .role-bras_long { color: var(--color-bras); font-weight: 800; }
+        .role-civil { color: var(--color-civil); font-weight: 800; }
+        .text-center { text-align: center; }
+        .mb-1 { margin-bottom: 0.5rem; } .mb-2 { margin-bottom: 1rem; } .mb-3 { margin-bottom: 1.5rem; } .mt-2 { margin-top: 1rem; } .text-muted { color: var(--text-muted); }
+        .secret-word-display { font-size: 2.5rem; font-weight: 800; color: #f472b6; text-align: center; margin: 1rem 0; word-break: break-word; }
+
+        /* CHAT STYLES */
+        .chat-container {
+            margin-top: 2rem; background: rgba(0,0,0,0.3); border-radius: 1rem;
+            border: 1px solid rgba(255,255,255,0.1); display: flex; flex-direction: column; height: 300px;
+        }
+        .chat-messages { flex-grow: 1; overflow-y: auto; padding: 1rem; display: flex; flex-direction: column; gap: 0.5rem; }
+        .chat-msg { background: rgba(255,255,255,0.1); padding: 0.6rem 1rem; border-radius: 1rem; font-size: 0.95rem; align-self: flex-start; max-width: 85%; }
+        .chat-msg.me { background: var(--primary); align-self: flex-end; }
+        .chat-msg span { font-weight: 800; font-size: 0.8rem; color: #cbd5e1; display: block; margin-bottom: 0.2rem; }
+        .chat-msg.me span { color: #fff; }
+        .chat-input-area { display: flex; padding: 0.5rem; gap: 0.5rem; border-top: 1px solid rgba(255,255,255,0.1); }
+        .chat-input-area input { margin: 0; flex-grow: 1; border-radius: 2rem; padding: 0.8rem 1.2rem; }
+        .chat-input-area button { margin: 0; width: auto; padding: 0.8rem 1.5rem; border-radius: 2rem; }
+        
+        #room-code-display { position: absolute; top: 1rem; right: 1.5rem; background: rgba(255,255,255,0.1); padding: 0.3rem 0.8rem; border-radius: 0.5rem; font-family: monospace; font-weight: bold; }
+    </style>
+</head>
+<body>
+    <div id="room-code-display" class="hidden">Salle : <span id="display-code"></span></div>
+    <div id="app">
+        <!-- LOBBY JOIN -->
+        <div id="join-view">
+            <h1 class="title-main">UNDERCOVER<br><span class="subtitle">Mode En Ligne</span></h1>
+            <div class="card">
+                <input type="text" id="username" placeholder="Ton pseudo" autocomplete="off" maxlength="15">
+                <input type="text" id="room-code" placeholder="Code du salon (laisser vide pour créer)" autocomplete="off" style="text-transform: uppercase;" maxlength="6">
+                <button class="btn-primary" onclick="joinRoom()">Jouer</button>
+                <button class="btn-danger mt-2" onclick="window.location.href='/'">Retour</button>
+                <p id="join-error" class="text-center mt-2" style="color:var(--color-zorgor);"></p>
+            </div>
+        </div>
+
+        <!-- LOBBY WAIT / SETUP -->
+        <div id="lobby-view" class="card hidden">
+            <h2 class="mb-2 text-center">Salon : <span id="lobby-code-text" style="color:var(--primary)"></span></h2>
+            <p class="text-center text-muted mb-3">Partage ce code avec tes amis !</p>
+            
+            <ul class="player-list" id="lobby-players"></ul>
+
+            <div id="host-settings" class="hidden mt-2">
+                <hr style="border-color:rgba(255,255,255,0.1); margin:1rem 0;">
+                <label><strong>Mode</strong></label>
+                <select id="setting-mode" class="mb-2">
+                    <option value="Français Classique">Français Classique</option>
+                    <option value="Nouchi">Nouchi</option>
+                </select>
+
+                <div id="fr-settings">
+                    <label><strong>Nombre de Zorgor</strong></label>
+                    <select id="setting-zorgor">
+                        <option value="1">1</option><option value="2">2</option><option value="3">3</option>
+                    </select>
+                    
+                    <label><strong>Dictionnaire</strong></label>
+                    <select id="setting-dict">
+                        <option value="Français">Français</option>
+                        <option value="Nouchi">Nouchi</option>
+                        <option value="Mélangé">Mélangé</option>
+                    </select>
+                </div>
+
+                <div class="checkbox-group mt-2">
+                    <input type="checkbox" id="setting-mrwhite">
+                    <label for="setting-mrwhite">Mr. White ?</label>
+                </div>
+                <div class="checkbox-group">
+                    <input type="checkbox" id="setting-braslong">
+                    <label for="setting-braslong">Bras long ?</label>
+                </div>
+
+                <button class="btn-primary mt-2" onclick="startGame()">Démarrer la partie</button>
+                <p id="setup-error" style="color:var(--color-zorgor); text-align:center; margin-top:1rem;"></p>
+            </div>
+            <div id="guest-waiting" class="hidden text-center text-muted mt-2">
+                En attente que l'hôte lance la partie...
+            </div>
+        </div>
+
+        <!-- PLAYING VIEW (Word & Chat) -->
+        <div id="playing-view" class="card hidden">
+            <div class="text-center mb-3">
+                <h3 class="text-muted">Ton mot secret</h3>
+                <div class="secret-word-display" id="my-secret-word"></div>
+                <p class="text-muted" id="my-role-desc"></p>
+            </div>
+            
+            <div id="action-area" class="text-center p-3 mb-2" style="background:rgba(255,255,255,0.05); border-radius:1rem; padding:1rem;">
+                <h3 id="action-title" class="mb-2">Phase de description</h3>
+                <p id="action-desc" class="text-muted mb-2">Discutez dans le chat !</p>
+                
+                <div id="vote-section" class="hidden">
+                    <div id="vote-target-list" class="player-list mt-2"></div>
+                </div>
+                <div id="waiting-section" class="hidden text-muted">
+                    En attente des autres joueurs...
+                </div>
+                
+                <div id="vengeance-section" class="hidden">
+                    <p style="color:var(--color-mrwhite)">Tu es éliminé ! Choisis une cible :</p>
+                    <div id="vengeance-target-list" class="player-list mt-2"></div>
+                </div>
+            </div>
+            
+            <!-- CHAT -->
+            <div class="chat-container">
+                <div class="chat-messages" id="chat-messages"></div>
+                <div class="chat-input-area">
+                    <input type="text" id="chat-input" placeholder="Message..." autocomplete="off" onkeypress="if(event.key==='Enter') sendChat()">
+                    <button onclick="sendChat()" style="background:var(--primary)">Envoyer</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- GAME OVER -->
+        <div id="gameover-view" class="card hidden text-center">
+            <h1 class="mb-2" id="winner-text" style="font-size:2.5rem;"></h1>
+            <p class="mb-3 text-muted">La partie est terminée.</p>
+            <div id="gameover-roles" class="player-list mb-3"></div>
+            <button class="btn-primary" onclick="backToLobby()">Retour au salon</button>
+        </div>
+
+    </div>
+
+    <script>
+        const socket = io();
+        let myUsername = "";
+        let isHost = false;
+        let mySid = null;
+
+        const views = ['join-view', 'lobby-view', 'playing-view', 'gameover-view'];
+        function showView(id) {
+            views.forEach(v => document.getElementById(v).classList.add('hidden'));
+            document.getElementById(id).classList.remove('hidden');
+        }
+
+        // DOM Elements
+        const modeSelect = document.getElementById('setting-mode');
+        const frSettings = document.getElementById('fr-settings');
+        const mrWhiteCheck = document.getElementById('setting-mrwhite');
+
+        modeSelect.addEventListener('change', (e) => {
+            if(e.target.value === 'Nouchi') {
+                frSettings.classList.add('hidden');
+                mrWhiteCheck.checked = true;
+                mrWhiteCheck.disabled = true;
+            } else {
+                frSettings.classList.remove('hidden');
+                mrWhiteCheck.disabled = false;
+            }
+        });
+
+        function joinRoom() {
+            const u = document.getElementById('username').value.trim();
+            const r = document.getElementById('room-code').value.trim().toUpperCase();
+            if(!u) return alert("Choisis un pseudo !");
+            myUsername = u;
+            socket.emit('join_room', { username: u, room: r });
+        }
+
+        socket.on('room_error', (data) => {
+            document.getElementById('join-error').textContent = data.msg;
+        });
+
+        socket.on('lobby_update', (data) => {
+            document.getElementById('display-code').textContent = data.room;
+            document.getElementById('room-code-display').classList.remove('hidden');
+            document.getElementById('lobby-code-text').textContent = data.room;
+            
+            const list = document.getElementById('lobby-players');
+            list.innerHTML = data.players.map(p => `
+                <li class="player-item">
+                    <span>${p.name} ${p.sid === data.host ? '👑' : ''}</span>
+                </li>
+            `).join('');
+
+            isHost = (socket.id === data.host);
+            mySid = socket.id;
+
+            if(isHost) {
+                document.getElementById('host-settings').classList.remove('hidden');
+                document.getElementById('guest-waiting').classList.add('hidden');
+            } else {
+                document.getElementById('host-settings').classList.add('hidden');
+                document.getElementById('guest-waiting').classList.remove('hidden');
+            }
+
+            showView('lobby-view');
+        });
+
+        function startGame() {
+            const payload = {
+                mode: document.getElementById('setting-mode').value,
+                num_zorgor: document.getElementById('setting-zorgor').value,
+                dictionary: document.getElementById('setting-dict').value,
+                has_mr_white: mrWhiteCheck.checked,
+                has_bras_long: document.getElementById('setting-braslong').checked
+            };
+            socket.emit('start_game', payload);
+        }
+
+        socket.on('game_started', (data) => {
+            document.getElementById('my-secret-word').textContent = data.word;
+            let roleMsg = "";
+            if(data.role === 'civil') roleMsg = "Tu es un Civil. Trouve les intrus !";
+            if(data.role === 'zorgor') roleMsg = "Tu es Zorgor. Cache ton identité !";
+            if(data.role === 'mr_white') roleMsg = "Tu es Mr. White. Devine le mot des Civils !";
+            if(data.role === 'bras_long') roleMsg = "Tu as le Bras Long. Ton vote compte double contre les Zorgors !";
+            document.getElementById('my-role-desc').textContent = roleMsg;
+            
+            document.getElementById('chat-messages').innerHTML = ""; // Clear chat
+            showView('playing-view');
+        });
+
+        socket.on('state_update', (state) => {
+            if(state.status === 'game_over') {
+                showView('gameover-view');
+                const wt = document.getElementById('winner-text');
+                if(state.winner === 'civil') { wt.textContent = "Victoire des Civils !"; wt.style.color = "var(--color-civil)"; }
+                else if(state.winner === 'zorgor') { wt.textContent = "Victoire des Zorgors !"; wt.style.color = "var(--color-zorgor)"; }
+                else if(state.winner === 'mr_white') { wt.textContent = "Victoire de Mr. White !"; wt.style.color = "var(--color-mrwhite)"; }
+                else { wt.textContent = "Égalité !"; wt.style.color = "white"; }
+
+                document.getElementById('gameover-roles').innerHTML = state.players.map(p => `
+                    <li class="player-item ${!p.alive ? 'text-muted' : ''}" style="${!p.alive ? 'opacity:0.5; text-decoration:line-through; justify-content:space-between;' : 'justify-content:space-between;'}">
+                        <span>${p.name}</span>
+                        <span class="role-${p.role}">${formatRole(p.role)}</span>
+                    </li>
+                `).join('');
+                return;
+            }
+
+            // Update Action Area
+            const t = document.getElementById('action-title');
+            const d = document.getElementById('action-desc');
+            const vSec = document.getElementById('vote-section');
+            const wSec = document.getElementById('waiting-section');
+            const mSec = document.getElementById('vengeance-section');
+
+            vSec.classList.add('hidden');
+            wSec.classList.add('hidden');
+            mSec.classList.add('hidden');
+
+            const me = state.players.find(p => p.sid === mySid);
+
+            if(state.status === 'description_phase') {
+                t.textContent = "Phase de description";
+                d.textContent = "Discutez dans le chat pour trouver les imposteurs ! L'hôte lancera le vote.";
+                if(isHost) {
+                    vSec.classList.remove('hidden');
+                    document.getElementById('vote-target-list').innerHTML = `
+                        <button class="btn-danger" onclick="socket.emit('trigger_vote')">Passer au Vote</button>
+                    `;
+                }
+            } else if(state.status === 'voting_phase') {
+                t.textContent = "Phase de Vote";
+                d.textContent = "Éliminez un suspect secrètement :";
+                
+                if(me.alive && !state.has_voted.includes(mySid)) {
+                    vSec.classList.remove('hidden');
+                    const targets = state.players.filter(p => p.alive && p.sid !== mySid);
+                    document.getElementById('vote-target-list').innerHTML = targets.map(p => `
+                        <button class="player-item" onclick="submitVote('${p.sid}')">${p.name}</button>
+                    `).join('');
+                } else if(me.alive) {
+                    wSec.classList.remove('hidden');
+                    wSec.textContent = "En attente des autres votes...";
+                } else {
+                    wSec.classList.remove('hidden');
+                    wSec.textContent = "Tu es éliminé. Observe le vote en silence.";
+                }
+            } else if(state.status === 'vengeance_phase') {
+                t.textContent = "Dernier Souffle !";
+                if(me.role === 'mr_white' && !me.alive) {
+                    d.textContent = "Tu es Mr. White et tu as été éliminé. Emporte quelqu'un avec toi !";
+                    mSec.classList.remove('hidden');
+                    const targets = state.players.filter(p => p.alive);
+                    document.getElementById('vengeance-target-list').innerHTML = targets.map(p => `
+                        <button class="player-item" style="border-color:var(--danger)" onclick="submitVengeance('${p.sid}')">Éliminer ${p.name}</button>
+                    `).join('');
+                } else {
+                    d.textContent = "Mr. White choisit sa dernière victime...";
+                    wSec.classList.remove('hidden');
+                }
+            }
+        });
+
+        function submitVote(sid) { socket.emit('submit_vote', { target: sid }); }
+        function submitVengeance(sid) { socket.emit('submit_vengeance', { target: sid }); }
+        function backToLobby() { socket.emit('back_to_lobby'); }
+
+        // CHAT
+        function sendChat() {
+            const input = document.getElementById('chat-input');
+            const msg = input.value.trim();
+            if(msg) {
+                socket.emit('send_chat', { msg });
+                input.value = '';
+            }
+        }
+
+        socket.on('chat_msg', (data) => {
+            const box = document.getElementById('chat-messages');
+            const div = document.createElement('div');
+            const isMe = data.sid === mySid;
+            div.className = `chat-msg ${isMe ? 'me' : ''}`;
+            div.innerHTML = `<span>${data.sender}</span>${data.msg}`;
+            box.appendChild(div);
+            box.scrollTop = box.scrollHeight;
+        });
+
+        socket.on('sys_msg', (data) => {
+            const box = document.getElementById('chat-messages');
+            const div = document.createElement('div');
+            div.style.textAlign = 'center';
+            div.style.fontSize = '0.8rem';
+            div.style.color = 'var(--text-muted)';
+            div.style.margin = '0.5rem 0';
+            div.textContent = data.msg;
+            box.appendChild(div);
+            box.scrollTop = box.scrollHeight;
+        });
+
+        function formatRole(r) {
+            if(r === 'mr_white') return 'Mr. White';
+            if(r === 'bras_long') return 'Bras long';
+            if(r === 'zorgor') return 'Zorgor';
+            return 'Civil';
+        }
+    </script>
+</body>
+</html>

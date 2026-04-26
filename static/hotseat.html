@@ -1,0 +1,803 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Undercover - Mode Hot-Seat</title>
+    <link rel="manifest" href="/manifest.json">
+    <meta name="theme-color" content="#f97316">
+    <link rel="icon" href="/static/icon.svg" type="image/svg+xml">
+    <link rel="apple-touch-icon" href="/static/icon.svg">
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;800;900&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg: #0f172a;
+            --surface: rgba(30, 41, 59, 0.7);
+            --primary: #8b5cf6;
+            --primary-hover: #7c3aed;
+            --danger: #ef4444;
+            --text: #f8fafc;
+            --text-muted: #cbd5e1;
+            
+            --color-zorgor: #ef4444;
+            --color-mrwhite: #fcd34d;
+            --color-bras: #60a5fa;
+            --color-civil: #34d399;
+        }
+        
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            font-family: 'Outfit', sans-serif;
+        }
+
+        body {
+            background-color: var(--bg);
+            color: var(--text);
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            background-image: radial-gradient(circle at top right, #312e81, transparent 40%),
+                              radial-gradient(circle at bottom left, #4c1d95, transparent 40%);
+            background-attachment: fixed;
+        }
+
+        #app {
+            width: 100%;
+            max-width: 500px;
+            padding: 2rem 1.5rem;
+            display: flex;
+            flex-direction: column;
+            gap: 1.5rem;
+        }
+
+        h1, .title-main {
+            text-align: center;
+            font-size: 2.5rem;
+            font-weight: 800;
+            background: linear-gradient(to right, #a78bfa, #f472b6);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            margin-bottom: 1rem;
+            text-shadow: 0 4px 20px rgba(167, 139, 250, 0.3);
+            cursor: pointer;
+        }
+        .subtitle { font-size: 1.2rem; display: block; font-weight: 600; color: #cbd5e1; -webkit-text-fill-color: #cbd5e1; background: none; text-shadow: none; }
+
+        .card {
+            background: var(--surface);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 1.5rem;
+            padding: 2rem;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
+            animation: fadeIn 0.4s ease-out;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .hidden { display: none !important; }
+
+        input[type="text"] {
+            width: 100%;
+            padding: 1rem;
+            margin-bottom: 1rem;
+            border-radius: 0.75rem;
+            border: 1px solid rgba(255,255,255,0.2);
+            background: rgba(0,0,0,0.2);
+            color: white;
+            font-size: 1.1rem;
+            outline: none;
+            transition: border-color 0.3s;
+        }
+
+        input[type="text"]:focus {
+            border-color: var(--primary);
+        }
+        
+        select {
+            width: 100%; padding: 0.8rem; margin-bottom: 1rem;
+            border-radius: 0.75rem; border: 1px solid rgba(255,255,255,0.2);
+            font-size: 1rem; outline: none; background: rgba(0,0,0,0.4); color: white;
+        }
+        select option { background: var(--bg); }
+
+        .checkbox-group { display: flex; align-items: center; gap: 0.5rem; margin-bottom: 1rem; font-weight: 600; }
+        .checkbox-group input { width: 1.2rem; height: 1.2rem; cursor: pointer; }
+
+        button {
+            width: 100%;
+            padding: 1rem;
+            border: none;
+            border-radius: 0.75rem;
+            background: var(--primary);
+            color: white;
+            font-size: 1.1rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s;
+            box-shadow: 0 4px 15px rgba(139, 92, 246, 0.4);
+            margin-bottom: 0.5rem;
+        }
+
+        button:hover {
+            background: var(--primary-hover);
+            transform: translateY(-2px);
+        }
+        
+        button.btn-danger {
+            background: var(--danger);
+            box-shadow: 0 4px 15px rgba(239, 68, 68, 0.4);
+        }
+        button.btn-disabled { background: rgba(255,255,255,0.1); box-shadow: none; cursor: not-allowed; color: var(--text-muted); }
+
+        .player-list {
+            list-style: none;
+            margin-bottom: 1.5rem;
+            display: flex; flex-direction: column; gap: 0.5rem;
+        }
+
+        .player-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 1rem;
+            background: rgba(255,255,255,0.05);
+            border-radius: 0.75rem;
+            transition: background 0.3s;
+            color: white;
+            font-weight: 600;
+            font-size: 1.1rem;
+        }
+        
+        button.player-item {
+            width: 100%;
+            border: 1px solid rgba(255,255,255,0.1);
+            background: rgba(255,255,255,0.05);
+            box-shadow: none;
+            color: white;
+            justify-content: center;
+        }
+        
+        button.player-item:hover {
+            background: rgba(255,255,255,0.15);
+            transform: translateY(-2px);
+            border-color: var(--primary);
+        }
+
+        .role-zorgor { color: var(--color-zorgor); font-weight: 800; }
+        .role-mr_white { color: var(--color-mrwhite); font-weight: 800; }
+        .role-bras_long { color: var(--color-bras); font-weight: 800; }
+        .role-civil { color: var(--color-civil); font-weight: 800; }
+
+        .text-center { text-align: center; }
+        .mb-1 { margin-bottom: 0.5rem; }
+        .mb-2 { margin-bottom: 1rem; }
+        .mb-3 { margin-bottom: 1.5rem; }
+        .mt-2 { margin-top: 1rem; }
+        .text-muted { color: var(--text-muted); }
+
+        .secret-word-display {
+            font-size: 2.5rem; font-weight: 800; color: #f472b6;
+            text-align: center; margin: 2rem 0; word-break: break-word;
+        }
+        
+        .timer-bar { height: 4px; background: var(--primary); width: 100%; transition: width 1s linear; border-radius: 2px; }
+        .points-badge { background: #eab308; color: #000; padding: 0.2rem 0.5rem; border-radius: 0.5rem; font-size: 0.9rem; font-weight: 800; }
+        .points-summary { background: rgba(0,0,0,0.2); border-radius: 0.5rem; padding: 1rem; text-align: left; font-size: 0.9rem; }
+    </style>
+</head>
+<body>
+    <div id="app">
+        <!-- HOME -->
+        <div id="home-view" class="hidden">
+            <h1 class="title-main" id="main-title">UNDERCOVER<br><span class="subtitle">Mode Hot-Seat (Local)</span></h1>
+            <div class="card">
+                <button class="btn-primary mb-2" onclick="showView('setup-view')">Nouvelle Partie</button>
+                <button class="btn-primary mb-2" style="background:#475569" onclick="showLeaderboard()">🏆 Classement & Points</button>
+                <button class="btn-primary" style="background:var(--danger)" onclick="window.location.href='/'">Retour au Mode Multi</button>
+            </div>
+        </div>
+
+        <!-- LEADERBOARD -->
+        <div id="leaderboard-view" class="card hidden">
+            <h2 class="mb-3 text-center">🏆 Classement Local</h2>
+            <div id="leaderboard-list" class="player-list" style="max-height: 50vh; overflow-y:auto;"></div>
+            <button class="btn-primary mt-2" onclick="showView('home-view')">Retour</button>
+        </div>
+
+        <!-- SETUP -->
+        <div id="setup-view" class="card hidden">
+            <h2 class="mb-3 text-center">Configuration</h2>
+            
+            <label><strong>Mode de jeu</strong></label>
+            <select id="setting-mode" class="mb-2">
+                <option value="Français Classique">Français Classique</option>
+                <option value="Nouchi">Nouchi</option>
+            </select>
+
+            <div id="fr-settings">
+                <label><strong>Nombre de Zorgor</strong></label>
+                <select id="setting-zorgor">
+                    <option value="1">1</option><option value="2">2</option><option value="3">3</option>
+                </select>
+                
+                <label><strong>Dictionnaire</strong></label>
+                <select id="setting-dict">
+                    <option value="Français">Français</option>
+                    <option value="Nouchi">Nouchi</option>
+                    <option value="Mélangé">Mélangé</option>
+                </select>
+            </div>
+
+            <div class="checkbox-group mt-2">
+                <input type="checkbox" id="setting-mrwhite">
+                <label for="setting-mrwhite">Mr. White ? <span id="mrwhite-note" style="font-size:0.8rem; color:var(--text-muted)"></span></label>
+            </div>
+
+            <div class="checkbox-group">
+                <input type="checkbox" id="setting-braslong">
+                <label for="setting-braslong">Bras long ?</label>
+            </div>
+
+            <hr style="margin: 1.5rem 0; border: none; border-top: 1px solid rgba(255,255,255,0.1)">
+
+            <h3 class="mb-2">Joueurs (<span id="player-count">0</span>/12)</h3>
+            <div style="display:flex; gap:0.5rem; margin-bottom: 1rem;">
+                <input type="text" id="player-name" placeholder="Nom du joueur" autocomplete="off" style="margin:0" onkeypress="if(event.key==='Enter') addPlayer()">
+                <button onclick="addPlayer()" style="width:auto; margin:0">Ajouter</button>
+            </div>
+            
+            <ul class="player-list" id="setup-player-list"></ul>
+
+            <button class="btn-primary mt-2" onclick="startGame()" id="start-btn">Démarrer la partie</button>
+            <p id="setup-error" style="color:var(--color-zorgor); text-align:center; margin-top:1rem;"></p>
+        </div>
+
+        <!-- REVEAL -->
+        <div id="reveal-view" class="card hidden text-center">
+            <h2 class="mb-1">Au tour de :</h2>
+            <h1 class="mb-3" id="reveal-name" style="font-size:2.5rem; color:var(--primary)"></h1>
+            
+            <div id="reveal-hidden-state">
+                <p class="mb-3 text-muted">Passez le téléphone à cette personne.</p>
+                <button class="btn-primary" onclick="showWord()">Voir mon rôle</button>
+            </div>
+            
+            <div id="reveal-shown-state" class="hidden">
+                <div class="secret-word-display" id="reveal-word"></div>
+                <div style="width:100%; background:rgba(0,0,0,0.2); border-radius:2px; margin-bottom:1.5rem;">
+                    <div id="reveal-timer" class="timer-bar"></div>
+                </div>
+                <p class="text-muted mb-2">Mémorise-le bien et cache l'écran !</p>
+                <button onclick="nextReveal()">C'est mémorisé</button>
+            </div>
+        </div>
+
+        <!-- DESCRIPTION INPUT -->
+        <div id="desc-input-view" class="card hidden text-center">
+            <h2 class="mb-3">🗣️ Phase de description</h2>
+            <p class="mb-2" style="font-size:1.1rem;">Au tour de <strong id="desc-name" style="color:var(--primary); font-size:1.4rem;"></strong> de décrire son mot à voix haute.</p>
+            <p class="text-muted mb-3" style="font-size:0.95rem;">(Cliquez sur le bouton quand la description est terminée)</p>
+            <button class="btn-primary" onclick="submitDesc()">Joueur suivant</button>
+        </div>
+
+        <!-- VOTING INPUT -->
+        <div id="vote-input-view" class="card hidden text-center">
+            <h2 class="mb-1">Tour de vote secret</h2>
+            <p class="mb-3 text-muted">Passez le téléphone à <strong id="vote-name" style="color:var(--primary)"></strong> pour qu'il élimine un suspect :</p>
+            <div id="vote-target-list" class="player-list"></div>
+        </div>
+
+        <!-- VOTING RESULT -->
+        <div id="vote-result-view" class="card hidden text-center">
+            <h2 class="mb-3">Résultat du vote</h2>
+            <h1 id="eliminated-name" class="mb-1" style="font-size:2.5rem; color:var(--danger)"></h1>
+            <p id="eliminated-role" class="mb-3" style="font-size:1.2rem;"></p>
+            <button class="btn-primary" onclick="nextRound()">Tour suivant</button>
+        </div>
+
+        <!-- VENGEANCE -->
+        <div id="vengeance-view" class="card hidden text-center">
+            <h2 class="mb-1" style="color:var(--color-mrwhite)">Dernier Souffle !</h2>
+            <p class="mb-3 text-muted"><strong id="vengeance-name"></strong>, tu as été éliminé. Choisis quelqu'un à emporter avec toi !</p>
+            <div id="vengeance-target-list" class="player-list"></div>
+        </div>
+
+        <!-- GAME OVER -->
+        <div id="gameover-view" class="card hidden text-center">
+            <h1 class="mb-2" id="winner-text" style="font-size:2.5rem;"></h1>
+            <p class="mb-3 text-muted">La partie est terminée.</p>
+            <div id="gameover-points" class="points-summary mb-3"></div>
+            <div id="gameover-roles" class="player-list mb-3"></div>
+            <button class="btn-primary" onclick="showLeaderboard()">🏆 Voir le Classement</button>
+            <button class="btn-primary mt-2" style="background:#475569" onclick="resetGame()">Retour à l'accueil</button>
+        </div>
+
+    </div>
+
+    <script>
+        const FR_PAIRS = [
+            ["Plage", "Mer"], ["Voiture", "Moto"], ["Soleil", "Lune"], ["Chat", "Chien"],
+            ["École", "Université"], ["Pain", "Beurre"], ["Eau", "Jus"], ["Maison", "Appartement"],
+            ["Téléphone", "Ordinateur"], ["Ciel", "Terre"], ["Riz", "Attiéké"], ["Vélo", "Trottinette"],
+            ["Livre", "Cahier"], ["Médecin", "Infirmier"], ["Avion", "Hélicoptère"], ["Pluie", "Orage"],
+            ["Chaussure", "Sandale"], ["Dormir", "Rêver"], ["Manger", "Cuisiner"], ["Rire", "Sourire"]
+        ];
+
+        const NOUCHI_WORDS = [
+            "Mougou", "Mougouli", "Mousso", "Skinny", "Bissab", "Gbailler", "Didi B", "Himra",
+            "Maabio", "Riz coucher", "Tuer cabri", "Mougoupan", "Dohi", "Brouteur", "Le père daloa",
+            "Anisorgorman", "Mon pied est sur cailloux", "Côcôta", "Djafoule", "Enjaillement",
+            "Fraya", "Gaou", "Gbairè", "Woro-woro", "DJOULA", "RHDP", "Souayer"
+        ];
+
+        const setupPlayers = [];
+        let gameState = { status: 'home' };
+
+        const views = ['home-view', 'leaderboard-view', 'setup-view', 'reveal-view', 'desc-input-view', 'vote-input-view', 'vote-result-view', 'vengeance-view', 'gameover-view'];
+        
+        function showView(id) {
+            views.forEach(v => {
+                const el = document.getElementById(v);
+                if(el) el.classList.add('hidden');
+            });
+            const target = document.getElementById(id);
+            if(target) target.classList.remove('hidden');
+        }
+
+        /* --- LEADERBOARD & LOCAL STORAGE --- */
+        let clickCount = 0;
+        document.getElementById('main-title').addEventListener('click', () => {
+            clickCount++;
+            if(clickCount >= 5) {
+                clickCount = 0;
+                let pwd = prompt("Mot de passe admin :");
+                if(pwd === "admin123") {
+                    localStorage.removeItem('undercover_scores');
+                    alert("Classement réinitialisé !");
+                    showView('home-view');
+                }
+            }
+            setTimeout(() => clickCount = 0, 2000);
+        });
+
+        function getScores() {
+            return JSON.parse(localStorage.getItem('undercover_scores') || '{}');
+        }
+        function saveScores(scores) {
+            localStorage.setItem('undercover_scores', JSON.stringify(scores));
+        }
+
+        function showLeaderboard() {
+            const scores = getScores();
+            const arr = Object.values(scores).sort((a,b) => b.points - a.points);
+            const list = document.getElementById('leaderboard-list');
+            if(arr.length === 0) {
+                list.innerHTML = "<p class='text-center text-muted'>Aucune partie jouée.</p>";
+            } else {
+                list.innerHTML = arr.map((p, i) => `
+                    <div class="player-item">
+                        <span>#${i+1} <strong>${p.pseudo}</strong></span>
+                        <span class="points-badge">${p.points} pts (${p.victoires} V)</span>
+                    </div>
+                `).join('');
+            }
+            showView('leaderboard-view');
+        }
+
+        function awardPoints(players, winnerMode) {
+            const scores = getScores();
+            let updates = [];
+
+            const getRole = (id) => players.find(p => p.id === id).role;
+
+            players.forEach(p => {
+                if(!scores[p.name]) scores[p.name] = { pseudo: p.name, points: 0, parties: 0, victoires: 0 };
+                scores[p.name].parties++;
+                
+                let pts = 0;
+                let won = false;
+
+                if(winnerMode === 'civil' && (p.role === 'civil' || p.role === 'bras_long')) { pts += 2; won = true; }
+                if(winnerMode === 'zorgor' && p.role === 'zorgor') { pts += 2; won = true; }
+                if(winnerMode === 'mr_white' && p.role === 'mr_white') { pts += 2; won = true; }
+
+                if(p.role === 'zorgor' && p.alive) pts += 1;
+                if(p.role === 'mr_white' && winnerMode === 'mr_white') pts += 3;
+                if(p.alive) pts += 1; // Jamais éliminé
+
+                if(p.role === 'civil' && gameState.votes && gameState.votes[p.id] !== undefined) {
+                    const targetId = gameState.votes[p.id];
+                    const targetRole = getRole(targetId);
+                    if(gameState.mode === 'Nouchi' && targetRole === 'mr_white') pts += 1;
+                    if(gameState.mode === 'Français Classique' && targetRole === 'zorgor') pts += 1;
+                }
+
+                if(p.role === 'bras_long' && gameState.bras_long_broke_tie) pts += 1;
+
+                if(won) scores[p.name].victoires++;
+                scores[p.name].points += pts;
+                
+                if(pts > 0) updates.push(`<strong>${p.name}</strong> : +${pts} pts`);
+            });
+
+            saveScores(scores);
+            return updates;
+        }
+
+        /* --- ENGINE --- */
+        const modeSelect = document.getElementById('setting-mode');
+        const frSettings = document.getElementById('fr-settings');
+        const mrWhiteCheck = document.getElementById('setting-mrwhite');
+        const mrWhiteNote = document.getElementById('mrwhite-note');
+
+        modeSelect.addEventListener('change', (e) => {
+            if(e.target.value === 'Nouchi') {
+                frSettings.classList.add('hidden');
+                mrWhiteCheck.checked = true;
+                mrWhiteCheck.disabled = true;
+                mrWhiteNote.textContent = "(Forcé en Nouchi)";
+            } else {
+                frSettings.classList.remove('hidden');
+                mrWhiteCheck.disabled = false;
+                mrWhiteNote.textContent = "";
+            }
+        });
+
+        function addPlayer() {
+            const input = document.getElementById('player-name');
+            const name = input.value.trim();
+            if(name && !setupPlayers.includes(name)) {
+                setupPlayers.push(name);
+                input.value = '';
+                renderSetupList();
+            }
+        }
+
+        function removePlayer(idx) {
+            setupPlayers.splice(idx, 1);
+            renderSetupList();
+        }
+
+        function renderSetupList() {
+            const list = document.getElementById('setup-player-list');
+            list.innerHTML = setupPlayers.map((p, i) => `
+                <li class="player-item">
+                    <span>${p}</span>
+                    <button style="width:auto; padding:0.4rem 0.8rem; background:rgba(239, 68, 68, 0.8); margin:0; border-radius:0.5rem; font-size:0.9rem;" onclick="removePlayer(${i})">X</button>
+                </li>
+            `).join('');
+            document.getElementById('player-count').textContent = setupPlayers.length;
+        }
+
+        function startGame() {
+            const err = document.getElementById('setup-error');
+            const n = setupPlayers.length;
+            if(n < 4 || n > 12) { err.textContent = "Il faut entre 4 et 12 joueurs."; return; }
+            err.textContent = "";
+
+            const mode = modeSelect.value;
+            const dictChoice = document.getElementById('setting-dict').value;
+            const hasMrWhite = mrWhiteCheck.checked;
+            const hasBrasLong = document.getElementById('setting-braslong').checked;
+            let numZorgor = parseInt(document.getElementById('setting-zorgor').value);
+
+            let roles = [];
+            let civilWord = "", zorgorWord = "";
+
+            if(mode === "Français Classique") {
+                let w = hasMrWhite ? 1 : 0;
+                let b = hasBrasLong ? 1 : 0;
+                let z = numZorgor;
+                let c = n - z - w - b;
+                if(c < 1) { err.textContent = "Trop de rôles spéciaux pour le nombre de joueurs."; return; }
+                
+                for(let i=0; i<z; i++) roles.push("zorgor");
+                for(let i=0; i<w; i++) roles.push("mr_white");
+                for(let i=0; i<b; i++) roles.push("bras_long");
+                for(let i=0; i<c; i++) roles.push("civil");
+                
+                roles.sort(() => Math.random() - 0.5);
+
+                let pair;
+                if(dictChoice === "Français") pair = FR_PAIRS[Math.floor(Math.random() * FR_PAIRS.length)];
+                else if(dictChoice === "Nouchi") {
+                    let w1 = NOUCHI_WORDS[Math.floor(Math.random() * NOUCHI_WORDS.length)];
+                    let w2 = NOUCHI_WORDS[Math.floor(Math.random() * NOUCHI_WORDS.length)];
+                    pair = [w1, w2];
+                } else {
+                    if(Math.random() < 0.5) pair = FR_PAIRS[Math.floor(Math.random() * FR_PAIRS.length)];
+                    else pair = [NOUCHI_WORDS[Math.floor(Math.random() * NOUCHI_WORDS.length)], NOUCHI_WORDS[Math.floor(Math.random() * NOUCHI_WORDS.length)]];
+                }
+                civilWord = pair[0]; zorgorWord = pair[1];
+                if(Math.random() < 0.5) { civilWord = pair[1]; zorgorWord = pair[0]; }
+            } else {
+                let w = 1;
+                let b = hasBrasLong ? 1 : 0;
+                let c = n - w - b;
+                if(c < 1) { err.textContent = "Pas assez de joueurs."; return; }
+                
+                roles.push("mr_white");
+                if(b) roles.push("bras_long");
+                for(let i=0; i<c; i++) roles.push("civil");
+                roles.sort(() => Math.random() - 0.5);
+                
+                civilWord = NOUCHI_WORDS[Math.floor(Math.random() * NOUCHI_WORDS.length)];
+                zorgorWord = "";
+            }
+
+            gameState = {
+                status: 'showing_word',
+                mode: mode,
+                players: setupPlayers.map((name, i) => {
+                    let r = roles[i];
+                    let w = civilWord;
+                    if(r === 'mr_white') w = "Tu es Mr. White ! Tu n'as pas de mot secret.";
+                    if(r === 'zorgor') w = zorgorWord;
+                    return { id: i, name: name, role: r, word: w, alive: true };
+                }),
+                current_idx: 0,
+                winner: null,
+                eliminated_this_round: null,
+                votes: {},
+                bras_long_broke_tie: false
+            };
+            updateState();
+        }
+
+        function getNextAliveIdx(startIdx) {
+            let idx = startIdx;
+            const n = gameState.players.length;
+            for(let i=0; i<n; i++) {
+                if(idx < n && gameState.players[idx].alive) return idx;
+                idx++;
+            }
+            return n;
+        }
+
+        function checkVictory() {
+            let civils = 0, zorgors = 0, whites = 0;
+            gameState.players.forEach(p => {
+                if(p.alive) {
+                    if(p.role === 'civil' || p.role === 'bras_long') civils++;
+                    if(p.role === 'zorgor') zorgors++;
+                    if(p.role === 'mr_white') whites++;
+                }
+            });
+            const total = civils + zorgors + whites;
+            if(total === 0) return 'Égalité';
+
+            if(gameState.mode === 'Français Classique') {
+                if(total === 2 && whites === 1 && zorgors === 1) return 'mr_white';
+                if(zorgors >= (civils + whites) && zorgors > 0) return 'zorgor';
+                if(zorgors === 0) {
+                    if(whites === 0) return 'civil';
+                    else if(total <= 2) return 'mr_white';
+                }
+            } else {
+                if(whites === 0) return 'civil';
+                if(whites === 1 && civils <= 1) return 'mr_white';
+            }
+            return null;
+        }
+
+        function updateState() {
+            const state = gameState;
+            if(state.status === 'home') {
+                showView('home-view');
+            } else if(state.status === 'showing_word') {
+                showView('reveal-view');
+                document.getElementById('reveal-hidden-state').classList.remove('hidden');
+                document.getElementById('reveal-shown-state').classList.add('hidden');
+                document.getElementById('reveal-name').textContent = state.players[state.current_idx].name;
+            } else if(state.status === 'description_input') {
+                showView('desc-input-view');
+                document.getElementById('desc-name').textContent = state.players[state.current_idx].name;
+            } else if(state.status === 'voting_input') {
+                showView('vote-input-view');
+                const voter = state.players[state.current_idx];
+                document.getElementById('vote-name').textContent = voter.name;
+                
+                const list = document.getElementById('vote-target-list');
+                list.innerHTML = state.players.filter(p => p.alive && p.id !== voter.id).map(p => `
+                    <button class="player-item" onclick="submitVote(${p.id})">${p.name}</button>
+                `).join('');
+            } else if(state.status === 'voting_result') {
+                showView('vote-result-view');
+                if(!state.eliminated_this_round) {
+                    document.getElementById('eliminated-name').textContent = "Personne !";
+                    document.getElementById('eliminated-role').innerHTML = "Égalité parfaite.";
+                } else {
+                    const p = state.eliminated_this_round;
+                    document.getElementById('eliminated-name').textContent = p.name;
+                    document.getElementById('eliminated-role').innerHTML = `Rôle : <span class="role-${p.role}">${formatRole(p.role)}</span>`;
+                }
+            } else if(state.status === 'vengeance') {
+                showView('vengeance-view');
+                const mw = state.eliminated_this_round;
+                document.getElementById('vengeance-name').textContent = mw.name;
+                const list = document.getElementById('vengeance-target-list');
+                list.innerHTML = state.players.filter(p => p.alive).map(p => `
+                    <button class="player-item" style="border-color:var(--danger)" onclick="submitVengeance(${p.id})">Éliminer ${p.name}</button>
+                `).join('');
+            } else if(state.status === 'game_over') {
+                showView('gameover-view');
+                const wt = document.getElementById('winner-text');
+                if(state.winner === 'civil') { wt.textContent = "Victoire des Civils !"; wt.style.color = "var(--color-civil)"; }
+                else if(state.winner === 'zorgor') { wt.textContent = "Victoire des Zorgors !"; wt.style.color = "var(--color-zorgor)"; }
+                else if(state.winner === 'mr_white') { wt.textContent = "Victoire de Mr. White !"; wt.style.color = "var(--color-mrwhite)"; }
+                else { wt.textContent = "Égalité !"; wt.style.color = "white"; }
+
+                const pointsSummary = document.getElementById('gameover-points');
+                if(state.pointsUpdates && state.pointsUpdates.length > 0) {
+                    pointsSummary.innerHTML = "<strong>🏆 Points gagnés :</strong><br>" + state.pointsUpdates.join('<br>');
+                } else {
+                    pointsSummary.innerHTML = "";
+                }
+
+                document.getElementById('gameover-roles').innerHTML = state.players.map(p => `
+                    <li class="player-item ${!p.alive ? 'text-muted' : ''}" style="${!p.alive ? 'opacity:0.5; text-decoration:line-through; justify-content:space-between;' : 'justify-content:space-between;'}">
+                        <span>${p.name}</span>
+                        <span class="role-${p.role}">${formatRole(p.role)}</span>
+                    </li>
+                `).join('');
+            }
+        }
+
+        function showWord() {
+            document.getElementById('reveal-hidden-state').classList.add('hidden');
+            document.getElementById('reveal-shown-state').classList.remove('hidden');
+            document.getElementById('reveal-word').textContent = gameState.players[gameState.current_idx].word;
+            
+            const timer = document.getElementById('reveal-timer');
+            timer.style.transition = 'none';
+            timer.style.width = '100%';
+            setTimeout(() => {
+                timer.style.transition = 'width 5s linear';
+                timer.style.width = '0%';
+            }, 50);
+        }
+
+        function nextReveal() {
+            gameState.current_idx++;
+            if(gameState.current_idx >= gameState.players.length) {
+                gameState.status = 'description_input';
+                gameState.current_idx = getNextAliveIdx(0);
+            }
+            updateState();
+        }
+
+        function submitDesc() {
+            // Hotseat skips description input directly to voting after all spoken
+            gameState.status = 'voting_input';
+            gameState.current_idx = getNextAliveIdx(0);
+            gameState.votes = {};
+            updateState();
+        }
+
+        function submitVote(target_id) {
+            gameState.votes[gameState.current_idx] = target_id;
+            let next_idx = getNextAliveIdx(gameState.current_idx + 1);
+            if(next_idx >= gameState.players.length) {
+                processVotes();
+            } else {
+                gameState.current_idx = next_idx;
+                updateState();
+            }
+        }
+
+        function processVotes() {
+            let tally = {};
+            let brasLongVote = null;
+
+            Object.keys(gameState.votes).forEach(voter_id => {
+                let v_id = parseInt(voter_id);
+                let target_id = gameState.votes[voter_id];
+                const voter = gameState.players[v_id];
+                const target = gameState.players[target_id];
+                
+                let weight = 1;
+                if(voter.role === 'bras_long' && target.role === 'zorgor') weight = 2;
+                if(voter.role === 'bras_long') brasLongVote = target_id;
+                
+                tally[target_id] = (tally[target_id] || 0) + weight;
+            });
+
+            if(Object.keys(tally).length === 0) {
+                gameState.status = 'voting_result';
+                gameState.eliminated_this_round = null;
+                updateState();
+                return;
+            }
+
+            const maxVotes = Math.max(...Object.values(tally));
+            const tiedTargets = Object.keys(tally).filter(k => tally[k] === maxVotes).map(Number);
+            
+            let eliminatedId = null;
+            gameState.bras_long_broke_tie = false;
+
+            if(tiedTargets.length === 1) {
+                eliminatedId = tiedTargets[0];
+            } else {
+                if(brasLongVote !== null && tiedTargets.includes(brasLongVote)) {
+                    eliminatedId = brasLongVote;
+                    gameState.bras_long_broke_tie = true;
+                } else {
+                    eliminatedId = tiedTargets[Math.floor(Math.random() * tiedTargets.length)];
+                }
+            }
+
+            gameState.players[eliminatedId].alive = false;
+            gameState.eliminated_this_round = gameState.players[eliminatedId];
+
+            const winner = checkVictory();
+            if(winner) {
+                gameState.winner = winner;
+                gameState.status = 'game_over';
+                gameState.pointsUpdates = awardPoints(gameState.players, winner);
+            } else {
+                if(gameState.mode === 'Nouchi' && gameState.players[eliminatedId].role === 'mr_white') {
+                    gameState.status = 'vengeance';
+                } else {
+                    gameState.status = 'voting_result';
+                }
+            }
+            updateState();
+        }
+
+        function submitVengeance(target_id) {
+            gameState.players[target_id].alive = false;
+            const winner = checkVictory();
+            if(winner) {
+                gameState.winner = winner;
+                gameState.status = 'game_over';
+                gameState.pointsUpdates = awardPoints(gameState.players, winner);
+            } else {
+                gameState.status = 'voting_result';
+            }
+            updateState();
+        }
+
+        function nextRound() {
+            gameState.status = 'description_input';
+            gameState.current_idx = getNextAliveIdx(0);
+            updateState();
+        }
+
+        function resetGame() {
+            setupPlayers.length = 0;
+            renderSetupList();
+            gameState = { status: 'home' };
+            updateState();
+        }
+
+        function formatRole(r) {
+            if(r === 'mr_white') return 'Mr. White';
+            if(r === 'bras_long') return 'Bras long';
+            if(r === 'zorgor') return 'Zorgor';
+            return 'Civil';
+        }
+
+        // Init
+        showView('home-view');
+        
+        // Register Service Worker
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', () => {
+                navigator.serviceWorker.register('/sw.js').then(reg => {
+                    console.log('Service Worker enregistré', reg.scope);
+                }).catch(err => {
+                    console.log('Erreur Service Worker:', err);
+                });
+            });
+        }
+    </script>
+</body>
+</html>
