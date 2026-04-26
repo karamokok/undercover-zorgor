@@ -362,7 +362,7 @@
             views.forEach(v => document.getElementById(v).classList.add('hidden'));
             document.getElementById(id).classList.remove('hidden');
             
-            if(id === 'playing-view') {
+            if(id === 'playing-view' || id === 'gameover-view') {
                 document.getElementById('chat-fab').classList.remove('hidden');
             } else {
                 document.getElementById('chat-fab').classList.add('hidden');
@@ -565,7 +565,11 @@
 
             if(state.status === 'description_phase') {
                 const speaker = state.players.find(p => p.sid === state.current_speaker_sid);
-                t.textContent = `🎤 Tour de ${speaker ? speaker.name : '?'}`;
+                if (speaker) {
+                    t.textContent = `🎤 Tour de ${speaker.name}`;
+                } else {
+                    t.textContent = `Descriptions terminées !`;
+                }
                 d.textContent = "";
                 
                 descSec.classList.remove('hidden');
@@ -595,12 +599,23 @@
                     inputArea.classList.add('hidden');
                     if(isHost) {
                         hostPassArea.classList.remove('hidden');
+                        if (!speaker) {
+                            hostPassArea.innerHTML = `<button class="btn-primary" style="width:auto; padding:0.5rem 1.5rem;" onclick="socket.emit('trigger_vote')">Passer aux votes</button>`;
+                        } else {
+                            hostPassArea.innerHTML = `<button class="btn-danger" style="width:auto; padding:0.5rem 1.5rem; background:rgba(255,255,255,0.1); box-shadow:none;" onclick="socket.emit('next_turn')">Hôte : Passer</button>`;
+                        }
                     } else {
                         hostPassArea.classList.add('hidden');
                     }
                 }
 
-                startDescTimer(isSpeaker);
+                if (speaker) {
+                    document.getElementById('desc-timer').classList.remove('hidden');
+                    startDescTimer(isSpeaker);
+                } else {
+                    document.getElementById('desc-timer').classList.add('hidden');
+                    clearTimer();
+                }
 
             } else if(state.status === 'voting_phase') {
                 t.textContent = "Phase de Vote";

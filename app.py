@@ -336,8 +336,7 @@ def on_submit_description(data):
         if idx + 1 < len(alive_players):
             state["current_speaker_sid"] = alive_players[idx + 1]["sid"]
         else:
-            state["status"] = "voting_phase"
-            state["votes"] = {}
+            state["current_speaker_sid"] = None
     except StopIteration:
         pass
         
@@ -361,8 +360,7 @@ def on_next_turn():
             state["current_speaker_sid"] = alive_players[idx + 1]["sid"]
             broadcast_state(room)
         else:
-            state["status"] = "voting_phase"
-            state["votes"] = {}
+            state["current_speaker_sid"] = None
             broadcast_state(room)
     except StopIteration:
         pass
