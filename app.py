@@ -50,7 +50,8 @@ def broadcast_state(room):
         "players": safe_players,
         "has_voted": list(state["votes"].keys()),
         "winner": state.get("winner"),
-        "current_speaker_sid": state.get("current_speaker_sid")
+        "current_speaker_sid": state.get("current_speaker_sid"),
+        "descriptions": state.get("descriptions", {})
     }
     
     # En fin de partie, on envoie aussi les mots à tout le monde
@@ -63,6 +64,7 @@ def broadcast_state(room):
 def start_description_phase(room):
     state = rooms[room]
     state["status"] = "description_phase"
+    state["descriptions"] = {}
     alive_players = [p for p in state["players"] if p["alive"]]
     if alive_players:
         state["current_speaker_sid"] = alive_players[0]["sid"]
@@ -148,6 +150,10 @@ def on_rejoin(data):
         
     if state.get("current_speaker_sid") == old_sid:
         state["current_speaker_sid"] = request.sid
+        
+    # Migrer l'ancienne description vers le nouveau sid
+    if "descriptions" in state and old_sid in state["descriptions"]:
+        state["descriptions"][request.sid] = state["descriptions"].pop(old_sid)
         
     new_votes = {}
     for voter_sid, target_sid in state["votes"].items():
@@ -285,6 +291,7 @@ def start_game_logic(room, settings):
 
     rooms[room]["mode"] = mode
     rooms[room]["votes"] = {}
+    rooms[room]["descriptions"] = {}
     rooms[room]["civil_word"] = civil_word
     rooms[room]["zorgor_word"] = zorgor_word
 
@@ -300,6 +307,40 @@ def start_game_logic(room, settings):
         socketio.emit('game_started', {'word': w, 'role': r}, room=p["sid"])
         
     start_description_phase(room)
+    broadcast_state(room)
+
+@socketio.on('submit_description')
+def on_submit_description(data):
+    room = sid_to_room.get(request.sid)
+    if not room or rooms[room]["status"] != "description_phase": return
+    state = rooms[room]
+    
+    if request.sid != state.get("current_speaker_sid"):
+        return
+        
+    desc = data.get("desc", "").strip()
+    if not desc:
+        desc = "..."
+        
+    if "descriptions" not in state:
+        state["descriptions"] = {}
+        
+    state["descriptions"][request.sid] = desc
+    
+    # Passer au suivant
+    alive_players = [p for p in state["players"] if p["alive"]]
+    current_sid = state.get("current_speaker_sid")
+    
+    try:
+        idx = next(i for i, p in enumerate(alive_players) if p["sid"] == current_sid)
+        if idx + 1 < len(alive_players):
+            state["current_speaker_sid"] = alive_players[idx + 1]["sid"]
+        else:
+            state["status"] = "voting_phase"
+            state["votes"] = {}
+    except StopIteration:
+        pass
+        
     broadcast_state(room)
 
 @socketio.on('next_turn')
