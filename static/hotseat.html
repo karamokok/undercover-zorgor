@@ -776,11 +776,9 @@
             // et checkVictory() déclare la victoire des Civils immédiatement.
             const eliminatedRole = gameState.players[eliminatedId].role;
 
-            if(eliminatedRole === 'mr_white' && gameState.mode === 'Nouchi') {
-                // Mode Nouchi : Mr. White se venge
-                gameState.status = 'vengeance';
-            } else if(eliminatedRole === 'mr_white' && gameState.mode === 'Français Classique') {
-                // Mode Classique : Mr. White a sa dernière chance de deviner le mot !
+            if(eliminatedRole === 'mr_white') {
+                // Tous les modes : Mr. White a sa dernière chance de deviner le mot des Civils !
+                // On lui passe le téléphone. S'il trouve → il gagne. Sinon → les Civils gagnent.
                 gameState.status = 'mr_white_guess';
             } else {
                 // Cas normal : vérifier la victoire
