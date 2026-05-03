@@ -771,18 +771,24 @@
             gameState.players[eliminatedId].alive = false;
             gameState.eliminated_this_round = gameState.players[eliminatedId];
 
-            const winner = checkVictory();
-            if(winner) {
-                gameState.winner = winner;
-                gameState.status = 'game_over';
-                gameState.pointsUpdates = awardPoints(gameState.players, winner);
+            // ⚠️ IMPORTANT : vérifier le rôle de l'éliminé EN PREMIER
+            // avant checkVictory(), sinon Mr. White (alive=false) n'est plus compté
+            // et checkVictory() déclare la victoire des Civils immédiatement.
+            const eliminatedRole = gameState.players[eliminatedId].role;
+
+            if(eliminatedRole === 'mr_white' && gameState.mode === 'Nouchi') {
+                // Mode Nouchi : Mr. White se venge
+                gameState.status = 'vengeance';
+            } else if(eliminatedRole === 'mr_white' && gameState.mode === 'Français Classique') {
+                // Mode Classique : Mr. White a sa dernière chance de deviner le mot !
+                gameState.status = 'mr_white_guess';
             } else {
-                const eliminatedRole = gameState.players[eliminatedId].role;
-                if(gameState.mode === 'Nouchi' && eliminatedRole === 'mr_white') {
-                    gameState.status = 'vengeance';
-                } else if(gameState.mode === 'Français Classique' && eliminatedRole === 'mr_white') {
-                    // Mr. White a sa dernière chance de deviner le mot !
-                    gameState.status = 'mr_white_guess';
+                // Cas normal : vérifier la victoire
+                const winner = checkVictory();
+                if(winner) {
+                    gameState.winner = winner;
+                    gameState.status = 'game_over';
+                    gameState.pointsUpdates = awardPoints(gameState.players, winner);
                 } else {
                     gameState.status = 'voting_result';
                 }
