@@ -151,8 +151,21 @@
     </style>
 </head>
 <body>
-    <audio id="bg-music" loop src="/static/music.mp3"></audio>
-    <button id="music-toggle" onclick="toggleMusic()" style="position:absolute; top:1rem; left:1rem; background:rgba(255,255,255,0.1); border:none; font-size:1.5rem; padding:0.5rem; border-radius:50%; width:45px; height:45px; z-index:1000; cursor:pointer; display:flex; align-items:center; justify-content:center;">🎵</button>
+    <!-- Settings Button -->
+    <button id="settings-btn" onclick="toggleSettings()" title="Paramètres" style="position:fixed; top:1rem; left:1rem; background:rgba(255,255,255,0.12); border:1px solid rgba(255,255,255,0.15); font-size:1.3rem; padding:0; border-radius:50%; width:44px; height:44px; z-index:1001; cursor:pointer; display:flex; align-items:center; justify-content:center;">⚙️</button>
+
+    <!-- Settings Panel -->
+    <div id="settings-panel" class="hidden" style="position:fixed; top:60px; left:1rem; background:rgba(15,23,42,0.97); backdrop-filter:blur(20px); border:1px solid rgba(255,255,255,0.15); border-radius:1.2rem; padding:1.5rem; z-index:1001; width:230px; box-shadow:0 8px 32px rgba(0,0,0,0.5);">
+        <h3 style="margin-bottom:1.2rem; color:white; font-size:1.1rem;">⚙️ Paramètres</h3>
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:1.2rem;">
+            <span style="color:#cbd5e1;">🎵 Musique</span>
+            <button id="music-toggle-btn" onclick="toggleMusicBtn()" style="width:auto; padding:0.3rem 0.9rem; margin:0; background:var(--primary); border-radius:0.5rem; font-size:0.9rem; font-weight:700;">ON</button>
+        </div>
+        <div>
+            <label style="color:#cbd5e1; font-size:0.85rem; display:block; margin-bottom:0.5rem;">🔊 Volume</label>
+            <input type="range" id="volume-slider" min="0" max="100" value="25" oninput="setMusicVolume(this.value)" style="width:100%; accent-color:var(--primary); cursor:pointer;">
+        </div>
+    </div>
 
     <div id="countdown-modal" class="hidden" style="position:fixed; top:0; left:0; width:100%; height:100dvh; z-index:9000; background:rgba(0,0,0,0.95); backdrop-filter:blur(10px); display:flex; flex-direction:column; align-items:center; justify-content:center;">
         <h2 style="color:var(--primary); font-size:2.5rem; margin-bottom:2rem; text-align:center;">Le jeu commence dans...</h2>
@@ -351,17 +364,99 @@
         let unreadCount = 0;
         let musicPlaying = false;
         
-        function toggleMusic() {
-            const audio = document.getElementById('bg-music');
-            if (musicPlaying) {
-                audio.pause();
-                document.getElementById('music-toggle').textContent = '🔇';
-            } else {
-                audio.play().catch(e => console.log('Audio play failed', e));
-                document.getElementById('music-toggle').textContent = '🎵';
+        function toggleMusic() {} // legacy stub
+
+        /* ===== MUSIQUE WEB AUDIO API ===== */
+        const music = {
+            ctx: null, masterGain: null, isPlaying: false,
+            volume: 0.25, droneNodes: [], pulseTimer: null,
+
+            _init() {
+                if (!this.ctx) {
+                    this.ctx = new (window.AudioContext || window.webkitAudioContext)();
+                    this.masterGain = this.ctx.createGain();
+                    this.masterGain.gain.value = this.volume;
+                    this.masterGain.connect(this.ctx.destination);
+                }
+                if (this.ctx.state === 'suspended') this.ctx.resume();
+            },
+            start() {
+                this._init();
+                if (this.isPlaying) return;
+                this.isPlaying = true;
+                this._drones();
+                this._pulse();
+            },
+            stop() {
+                this.isPlaying = false;
+                clearTimeout(this.pulseTimer);
+                this.droneNodes.forEach(n => { try { n.stop(this.ctx.currentTime + 0.8); } catch(e){} });
+                this.droneNodes = [];
+            },
+            setVol(v) {
+                this.volume = v;
+                if (this.masterGain) this.masterGain.gain.setTargetAtTime(v, this.ctx.currentTime, 0.3);
+            },
+            _osc(freq, type, gain, attack = 1.5) {
+                const o = this.ctx.createOscillator();
+                const g = this.ctx.createGain();
+                const f = this.ctx.createBiquadFilter();
+                f.type = 'lowpass'; f.frequency.value = 600;
+                o.type = type; o.frequency.value = freq;
+                g.gain.setValueAtTime(0, this.ctx.currentTime);
+                g.gain.linearRampToValueAtTime(gain, this.ctx.currentTime + attack);
+                o.connect(f); f.connect(g); g.connect(this.masterGain);
+                o.start(); this.droneNodes.push(o);
+            },
+            _drones() {
+                this._osc(55,   'sine',     0.35, 2.5);
+                this._osc(82.5, 'sine',     0.18, 3.5);
+                this._osc(110,  'triangle', 0.07, 5);
+            },
+            _pulse() {
+                if (!this.isPlaying) return;
+                const scale = [110, 131, 147, 165, 196, 220, 247, 262];
+                const freq = scale[Math.floor(Math.random() * scale.length)];
+                const o = this.ctx.createOscillator();
+                const g = this.ctx.createGain();
+                const f = this.ctx.createBiquadFilter();
+                f.type = 'bandpass'; f.frequency.value = freq * 2; f.Q.value = 6;
+                o.type = 'triangle'; o.frequency.value = freq;
+                const now = this.ctx.currentTime;
+                g.gain.setValueAtTime(0, now);
+                g.gain.linearRampToValueAtTime(0.10, now + 0.4);
+                g.gain.exponentialRampToValueAtTime(0.001, now + 3.5);
+                o.connect(f); f.connect(g); g.connect(this.masterGain);
+                o.start(now); o.stop(now + 4);
+                this.pulseTimer = setTimeout(() => this._pulse(), 1800 + Math.random() * 3500);
             }
-            musicPlaying = !musicPlaying;
+        };
+
+        let settingsOpen = false;
+        let musicOn = true;
+
+        function toggleSettings() {
+            settingsOpen = !settingsOpen;
+            document.getElementById('settings-panel').classList.toggle('hidden', !settingsOpen);
+            if (!music.isPlaying && musicOn) music.start();
         }
+        function toggleMusicBtn() {
+            const btn = document.getElementById('music-toggle-btn');
+            if (music.isPlaying) {
+                music.stop(); musicOn = false;
+                btn.textContent = 'OFF'; btn.style.background = '#475569';
+            } else {
+                music.start(); musicOn = true;
+                btn.textContent = 'ON'; btn.style.background = 'var(--primary)';
+            }
+        }
+        function setMusicVolume(val) {
+            music.setVol(val / 100);
+            if (!music.isPlaying && musicOn) music.start();
+        }
+        document.body.addEventListener('click', () => {
+            if (!music.isPlaying && musicOn) music.start();
+        }, { once: true });
 
         function toggleChat() {
             chatOpen = !chatOpen;
