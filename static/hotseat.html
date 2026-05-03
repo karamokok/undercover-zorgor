@@ -307,6 +307,14 @@
             <button class="btn-primary" onclick="nextRound()">Tour suivant</button>
         </div>
 
+        <!-- MR. WHITE GUESS -->
+        <div id="mrwhite-guess-view" class="card hidden text-center">
+            <h2 class="mb-1" style="color:var(--color-mrwhite)">🔍 Dernière Chance !</h2>
+            <p class="mb-3 text-muted"><strong id="mrwhite-guess-name"></strong>, tu as été éliminé ! Si tu devines le mot des Civils, tu voles la victoire !</p>
+            <input type="password" id="mrwhite-guess-input" placeholder="Tape le mot secret..." autocomplete="off" style="width:100%; padding:1rem; margin-bottom:1rem; border-radius:0.75rem; border:1px solid rgba(255,255,255,0.2); background:rgba(0,0,0,0.2); color:white; font-size:1.1rem; outline:none;" onkeypress="if(event.key==='Enter') submitMrWhiteGuess()">
+            <button class="btn-primary" onclick="submitMrWhiteGuess()">Deviner le mot</button>
+        </div>
+
         <!-- VENGEANCE -->
         <div id="vengeance-view" class="card hidden text-center">
             <h2 class="mb-1" style="color:var(--color-mrwhite)">Dernier Souffle !</h2>
@@ -345,7 +353,7 @@
         const setupPlayers = [];
         let gameState = { status: 'home' };
 
-        const views = ['home-view', 'leaderboard-view', 'setup-view', 'reveal-view', 'desc-input-view', 'vote-input-view', 'vote-result-view', 'vengeance-view', 'gameover-view'];
+        const views = ['home-view', 'leaderboard-view', 'setup-view', 'reveal-view', 'desc-input-view', 'vote-input-view', 'vote-result-view', 'vengeance-view', 'mrwhite-guess-view', 'gameover-view'];
         
         function showView(id) {
             views.forEach(v => {
@@ -536,6 +544,7 @@
             gameState = {
                 status: 'showing_word',
                 mode: mode,
+                civilWord: civilWord,
                 players: setupPlayers.map((name, i) => {
                     let r = roles[i];
                     let w = civilWord;
@@ -544,6 +553,8 @@
                     return { id: i, name: name, role: r, word: w, alive: true };
                 }),
                 current_idx: 0,
+                descOrder: [],
+                descOrderIdx: 0,
                 winner: null,
                 eliminated_this_round: null,
                 votes: {},
@@ -599,7 +610,8 @@
                 document.getElementById('reveal-name').textContent = state.players[state.current_idx].name;
             } else if(state.status === 'description_input') {
                 showView('desc-input-view');
-                document.getElementById('desc-name').textContent = state.players[state.current_idx].name;
+                const descPlayer = state.descOrder.length > 0 ? state.players.find(p => p.id === state.descOrder[state.descOrderIdx]) : state.players[state.current_idx];
+                document.getElementById('desc-name').textContent = descPlayer ? descPlayer.name : '?';
             } else if(state.status === 'voting_input') {
                 showView('vote-input-view');
                 const voter = state.players[state.current_idx];
@@ -619,6 +631,12 @@
                     document.getElementById('eliminated-name').textContent = p.name;
                     document.getElementById('eliminated-role').innerHTML = `Rôle : <span class="role-${p.role}">${formatRole(p.role)}</span>`;
                 }
+            } else if(state.status === 'mr_white_guess') {
+                showView('mrwhite-guess-view');
+                const mwPlayer = state.eliminated_this_round;
+                document.getElementById('mrwhite-guess-name').textContent = mwPlayer ? mwPlayer.name : 'Mr. White';
+                document.getElementById('mrwhite-guess-input').value = '';
+                setTimeout(() => document.getElementById('mrwhite-guess-input').focus(), 200);
             } else if(state.status === 'vengeance') {
                 showView('vengeance-view');
                 const mw = state.eliminated_this_round;
@@ -668,17 +686,33 @@
         function nextReveal() {
             gameState.current_idx++;
             if(gameState.current_idx >= gameState.players.length) {
-                gameState.status = 'description_input';
-                gameState.current_idx = getNextAliveIdx(0);
+                startDescPhase();
             }
             updateState();
         }
 
+        function startDescPhase() {
+            // Mélanger aléatoirement l'ordre de description
+            const aliveIds = gameState.players.filter(p => p.alive).map(p => p.id);
+            // Shuffle Fisher-Yates
+            for(let i = aliveIds.length - 1; i > 0; i--) {
+                const j = Math.floor(Math.random() * (i + 1));
+                [aliveIds[i], aliveIds[j]] = [aliveIds[j], aliveIds[i]];
+            }
+            gameState.descOrder = aliveIds;
+            gameState.descOrderIdx = 0;
+            gameState.status = 'description_input';
+        }
+
         function submitDesc() {
-            // Hotseat skips description input directly to voting after all spoken
-            gameState.status = 'voting_input';
-            gameState.current_idx = getNextAliveIdx(0);
-            gameState.votes = {};
+            // Avancer dans l'ordre aléatoire de description
+            gameState.descOrderIdx++;
+            if(gameState.descOrderIdx >= gameState.descOrder.length) {
+                // Tous ont décrit -> Phase de vote
+                gameState.status = 'voting_input';
+                gameState.current_idx = getNextAliveIdx(0);
+                gameState.votes = {};
+            }
             updateState();
         }
 
@@ -743,8 +777,12 @@
                 gameState.status = 'game_over';
                 gameState.pointsUpdates = awardPoints(gameState.players, winner);
             } else {
-                if(gameState.mode === 'Nouchi' && gameState.players[eliminatedId].role === 'mr_white') {
+                const eliminatedRole = gameState.players[eliminatedId].role;
+                if(gameState.mode === 'Nouchi' && eliminatedRole === 'mr_white') {
                     gameState.status = 'vengeance';
+                } else if(gameState.mode === 'Français Classique' && eliminatedRole === 'mr_white') {
+                    // Mr. White a sa dernière chance de deviner le mot !
+                    gameState.status = 'mr_white_guess';
                 } else {
                     gameState.status = 'voting_result';
                 }
@@ -765,9 +803,35 @@
             updateState();
         }
 
+        function submitMrWhiteGuess() {
+            const guess = document.getElementById('mrwhite-guess-input').value.trim();
+            if(!guess) return;
+            
+            const normalizeWord = (w) => w.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim();
+            const civilWord = gameState.civilWord || '';
+            
+            if(normalizeWord(guess) === normalizeWord(civilWord)) {
+                // Mr. White gagne !
+                gameState.winner = 'mr_white';
+                gameState.status = 'game_over';
+                gameState.pointsUpdates = awardPoints(gameState.players, 'mr_white');
+            } else {
+                // Raté -> vérifier victoire normale (sans Mr. White)
+                const winner = checkVictory();
+                if(winner) {
+                    gameState.winner = winner;
+                    gameState.status = 'game_over';
+                    gameState.pointsUpdates = awardPoints(gameState.players, winner);
+                } else {
+                    // Continuer le jeu sans Mr. White
+                    gameState.status = 'voting_result';
+                }
+            }
+            updateState();
+        }
+
         function nextRound() {
-            gameState.status = 'description_input';
-            gameState.current_idx = getNextAliveIdx(0);
+            startDescPhase();
             updateState();
         }
 
