@@ -42,7 +42,8 @@ def broadcast_state(room):
     for p in state["players"]:
         safe_players.append({
             "sid": p["sid"], "name": p["name"], "alive": p["alive"], 
-            "role": p["role"] if not p["alive"] or state["status"] == "game_over" else "?"
+            "role": p["role"] if not p["alive"] or state["status"] == "game_over" else "?",
+            "score": p.get("score", 0)
         })
         
     s = {
@@ -67,8 +68,13 @@ def start_description_phase(room):
     state["descriptions"] = {}
     alive_players = [p for p in state["players"] if p["alive"]]
     if alive_players:
-        state["current_speaker_sid"] = alive_players[0]["sid"]
+        import random
+        speaker_sids = [p["sid"] for p in alive_players]
+        random.shuffle(speaker_sids)
+        state["speaker_order"] = speaker_sids
+        state["current_speaker_sid"] = speaker_sids[0]
     else:
+        state["speaker_order"] = []
         state["current_speaker_sid"] = None
 
 @app.route('/')
@@ -228,6 +234,39 @@ def on_close_room():
         socketio.emit('room_closed', room=room)
         del rooms[room]
 
+@socketio.on('kick_player')
+def on_kick_player(data):
+    room = sid_to_room.get(request.sid)
+    if room and room in rooms and rooms[room]["host"] == request.sid:
+        target_sid = data.get('target')
+        player = next((p for p in rooms[room]["players"] if p["sid"] == target_sid), None)
+        if player:
+            # Envoie l'événement au joueur pour qu'il quitte
+            socketio.emit('kicked', room=target_sid)
+            # Le retire de la salle
+            rooms[room]["players"] = [p for p in rooms[room]["players"] if p["sid"] != target_sid]
+            
+            msg_obj = {'sid': 'system', 'sender': 'Système', 'msg': f'{player["name"]} a été expulsé.'}
+            rooms[room].setdefault("chat_messages", []).append(msg_obj)
+            socketio.emit('sys_msg', {'msg': msg_obj['msg']}, room=room)
+            
+            if rooms[room]["status"] == "lobby":
+                socketio.emit('lobby_update', {
+                    'room': room,
+                    'host': rooms[room]['host'],
+                    'players': [{'sid': p['sid'], 'name': p['name'], 'score': p.get('score', 0)} for p in rooms[room]['players']]
+                }, room=room)
+            else:
+                player["alive"] = False
+                winner = check_victory(room)
+                if winner:
+                    rooms[room]["winner"] = winner
+                    rooms[room]["status"] = "game_over"
+                broadcast_state(room)
+            leave_room(room, sid=target_sid)
+            if target_sid in sid_to_room:
+                del sid_to_room[target_sid]
+
 @socketio.on('send_chat')
 def on_chat(data):
     room = sid_to_room.get(request.sid)
@@ -362,17 +401,17 @@ def on_submit_description(data):
     state["descriptions"][request.sid] = desc
     
     # Passer au suivant
-    alive_players = [p for p in state["players"] if p["alive"]]
     current_sid = state.get("current_speaker_sid")
+    order = state.get("speaker_order", [])
     
     try:
-        idx = next(i for i, p in enumerate(alive_players) if p["sid"] == current_sid)
-        if idx + 1 < len(alive_players):
-            state["current_speaker_sid"] = alive_players[idx + 1]["sid"]
+        idx = order.index(current_sid)
+        if idx + 1 < len(order):
+            state["current_speaker_sid"] = order[idx + 1]
         else:
             state["current_speaker_sid"] = None
-    except StopIteration:
-        pass
+    except ValueError:
+        state["current_speaker_sid"] = None
         
     broadcast_state(room)
 
@@ -385,18 +424,18 @@ def on_next_turn():
     if request.sid != state["host"] and request.sid != state.get("current_speaker_sid"):
         return
         
-    alive_players = [p for p in state["players"] if p["alive"]]
     current_sid = state.get("current_speaker_sid")
+    order = state.get("speaker_order", [])
     
     try:
-        idx = next(i for i, p in enumerate(alive_players) if p["sid"] == current_sid)
-        if idx + 1 < len(alive_players):
-            state["current_speaker_sid"] = alive_players[idx + 1]["sid"]
+        idx = order.index(current_sid)
+        if idx + 1 < len(order):
+            state["current_speaker_sid"] = order[idx + 1]
             broadcast_state(room)
         else:
             state["current_speaker_sid"] = None
             broadcast_state(room)
-    except StopIteration:
+    except ValueError:
         pass
 
 @socketio.on('trigger_vote')
@@ -436,14 +475,38 @@ def on_submit_vote(data):
 def distribute_points(room):
     state = rooms[room]
     winner = state.get("winner")
+    mode = state.get("mode")
+    votes = state.get("votes", {})
+    
+    def get_role(sid):
+        for pl in state["players"]:
+            if pl["sid"] == sid:
+                return pl["role"]
+        return None
+
     for p in state["players"]:
         if p["role"] is None: continue
-        if winner == "civil" and p["role"] in ["civil", "bras_long"]:
-            p["score"] = p.get("score", 0) + 2
-        elif winner == "zorgor" and p["role"] == "zorgor":
-            p["score"] = p.get("score", 0) + 10
-        elif winner == "mr_white" and p["role"] == "mr_white":
-            p["score"] = p.get("score", 0) + 6
+        pts = 0
+        
+        # Base win points
+        if winner == "civil" and p["role"] in ["civil", "bras_long"]: pts += 2
+        elif winner == "zorgor" and p["role"] == "zorgor": pts += 10
+        elif winner == "mr_white" and p["role"] == "mr_white": pts += 6
+
+        # Alive bonus
+        if p["alive"]: pts += 1
+        
+        # Voting bonus
+        if p["role"] in ["civil", "bras_long"] and p["sid"] in votes:
+            target_role = get_role(votes[p["sid"]])
+            if mode == "Nouchi" and target_role == "mr_white": pts += 1
+            if mode == "Français Classique" and target_role == "zorgor": pts += 1
+            
+        # Bras long tie break bonus
+        if p["role"] == "bras_long" and state.get("bras_long_broke_tie", False):
+            pts += 1
+            
+        p["score"] = p.get("score", 0) + pts
 
 def process_votes(room):
     state = rooms[room]
@@ -463,10 +526,13 @@ def process_votes(room):
     tied = [sid for sid, v in tally.items() if v == max_votes]
     
     elim_sid = None
+    state["bras_long_broke_tie"] = False
     if len(tied) == 1:
         elim_sid = tied[0]
     else:
-        if bras_long_vote and bras_long_vote in tied: elim_sid = bras_long_vote
+        if bras_long_vote and bras_long_vote in tied:
+            elim_sid = bras_long_vote
+            state["bras_long_broke_tie"] = True
         else: elim_sid = random.choice(tied)
             
     elim = None
@@ -532,17 +598,6 @@ def on_submit_guess(data):
             
     broadcast_state(room)
 
-@socketio.on('back_to_lobby')
-def on_back_to_lobby():
-    room = sid_to_room.get(request.sid)
-    if room and rooms[room]["host"] == request.sid:
-        rooms[room]["status"] = "lobby"
-        rooms[room]["votes"] = {}
-        socketio.emit('lobby_update', {
-            'room': room,
-            'host': rooms[room]['host'],
-            'players': [{'sid': p['sid'], 'name': p['name'], 'score': p.get('score', 0)} for p in rooms[room]['players']]
-        }, room=room)
 
 def check_victory(room):
     players = rooms[room]["players"]

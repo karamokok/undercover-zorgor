@@ -369,7 +369,7 @@
         /* ===== MUSIQUE WEB AUDIO API ===== */
         const music = {
             ctx: null, masterGain: null, isPlaying: false,
-            volume: 0.25, droneNodes: [], pulseTimer: null,
+            volume: 0.25, timerID: null,
 
             _init() {
                 if (!this.ctx) {
@@ -384,51 +384,54 @@
                 this._init();
                 if (this.isPlaying) return;
                 this.isPlaying = true;
-                this._drones();
-                this._pulse();
+                this._playChillNotes();
             },
             stop() {
                 this.isPlaying = false;
-                clearTimeout(this.pulseTimer);
-                this.droneNodes.forEach(n => { try { n.stop(this.ctx.currentTime + 0.8); } catch(e){} });
-                this.droneNodes = [];
+                clearTimeout(this.timerID);
             },
             setVol(v) {
                 this.volume = v;
                 if (this.masterGain) this.masterGain.gain.setTargetAtTime(v, this.ctx.currentTime, 0.3);
             },
-            _osc(freq, type, gain, attack = 1.5) {
+            _playTone(freq, type, duration, vol) {
+                if (!this.isPlaying || !this.ctx) return;
                 const o = this.ctx.createOscillator();
                 const g = this.ctx.createGain();
-                const f = this.ctx.createBiquadFilter();
-                f.type = 'lowpass'; f.frequency.value = 600;
-                o.type = type; o.frequency.value = freq;
-                g.gain.setValueAtTime(0, this.ctx.currentTime);
-                g.gain.linearRampToValueAtTime(gain, this.ctx.currentTime + attack);
-                o.connect(f); f.connect(g); g.connect(this.masterGain);
-                o.start(); this.droneNodes.push(o);
-            },
-            _drones() {
-                this._osc(55,   'sine',     0.35, 2.5);
-                this._osc(82.5, 'sine',     0.18, 3.5);
-                this._osc(110,  'triangle', 0.07, 5);
-            },
-            _pulse() {
-                if (!this.isPlaying) return;
-                const scale = [110, 131, 147, 165, 196, 220, 247, 262];
-                const freq = scale[Math.floor(Math.random() * scale.length)];
-                const o = this.ctx.createOscillator();
-                const g = this.ctx.createGain();
-                const f = this.ctx.createBiquadFilter();
-                f.type = 'bandpass'; f.frequency.value = freq * 2; f.Q.value = 6;
-                o.type = 'triangle'; o.frequency.value = freq;
+                o.type = type; 
+                o.frequency.value = freq;
+                
                 const now = this.ctx.currentTime;
                 g.gain.setValueAtTime(0, now);
-                g.gain.linearRampToValueAtTime(0.10, now + 0.4);
-                g.gain.exponentialRampToValueAtTime(0.001, now + 3.5);
-                o.connect(f); f.connect(g); g.connect(this.masterGain);
-                o.start(now); o.stop(now + 4);
-                this.pulseTimer = setTimeout(() => this._pulse(), 1800 + Math.random() * 3500);
+                g.gain.linearRampToValueAtTime(vol, now + 0.05);
+                g.gain.exponentialRampToValueAtTime(0.001, now + duration);
+                
+                o.connect(g); 
+                g.connect(this.masterGain);
+                o.start(now); 
+                o.stop(now + duration);
+            },
+            _playChillNotes() {
+                if (!this.isPlaying) return;
+                const scale = [261.63, 293.66, 329.63, 392.00, 440.00, 523.25, 587.33, 659.25];
+                
+                const numNotes = Math.floor(Math.random() * 2) + 1;
+                
+                for(let i=0; i<numNotes; i++) {
+                    const freq = scale[Math.floor(Math.random() * scale.length)];
+                    setTimeout(() => {
+                        this._playTone(freq, 'sine', 2.0, 0.15);
+                    }, i * 200);
+                }
+                
+                if (Math.random() > 0.6) {
+                    const bassScale = [130.81, 146.83, 164.81, 196.00]; 
+                    const bFreq = bassScale[Math.floor(Math.random() * bassScale.length)];
+                    this._playTone(bFreq, 'triangle', 3.0, 0.2);
+                }
+
+                const nextTime = 400 + Math.random() * 800;
+                this.timerID = setTimeout(() => this._playChillNotes(), nextTime);
             }
         };
 
@@ -554,6 +557,19 @@
             }
         }
 
+        function kickPlayer(sid) {
+            if(confirm("Expulser ce joueur ?")) {
+                socket.emit('kick_player', { target: sid });
+            }
+        }
+
+        socket.on('kicked', () => {
+            alert("Vous avez été expulsé du salon.");
+            sessionStorage.removeItem('myUsername');
+            sessionStorage.removeItem('myRoom');
+            window.location.href = '/';
+        });
+
         socket.on('room_error', (data) => {
             document.getElementById('join-error').textContent = data.msg;
         });
@@ -569,15 +585,19 @@
             document.getElementById('room-code-display').classList.remove('hidden');
             document.getElementById('lobby-code-text').textContent = data.room;
             
+            const isHostCheck = (socket.id === data.host);
             const list = document.getElementById('lobby-players');
             list.innerHTML = data.players.map(p => `
                 <li class="player-item">
                     <span>${p.name} ${p.sid === data.host ? '👑' : ''}</span>
-                    <span style="font-size:0.95rem; color:var(--primary); font-weight:800;">${p.score || 0} pts</span>
+                    <div style="display:flex; align-items:center; gap:10px;">
+                        <span style="font-size:0.95rem; color:var(--primary); font-weight:800;">${p.score || 0} pts</span>
+                        ${isHostCheck && p.sid !== data.host ? `<button style="width:auto; padding:0.3rem 0.6rem; background:rgba(239, 68, 68, 0.8); border-radius:0.4rem; font-size:0.8rem; margin:0;" onclick="kickPlayer('${p.sid}')">X</button>` : ''}
+                    </div>
                 </li>
             `).join('');
 
-            isHost = (socket.id === data.host);
+            isHost = isHostCheck;
             mySid = socket.id;
 
             if(isHost) {
